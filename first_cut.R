@@ -1,6 +1,7 @@
 library(tidyverse)
 library(yaml)
 library(DBI)
+library(sf)
 
 #make sure wd is base of natrent-viewer repo
 setwd("H:/natrent-viewer")
@@ -15,24 +16,25 @@ natrent <- dbConnect(
   host = "natrent0.csde.washington.edu",
   user = names(cred),
   password = cred[[names(cred)]],
-  bigint = "character"
+  bigint = "numeric"
 )
 
 #function to use for dropping all NA columns in NHGIS extracts
 not_all_na <- function(x) any(!is.na(x))
 
-#### A. Load in Metropolitan Data, Mutate Columns ------------------------------
+
+#### A. Load in Metropolitan ACS Data, Mutate Columns --------------------------
 
 #CBSA level ACS estimates for 2013-2017
 acs_cbsa <- read_csv("H:/nhgis0100_csv/nhgis0100_ds233_20175_2017_cbsa.csv") %>%
   select_if(not_all_na) %>%
-  mutate(name = NAME_E,
+  mutate(met_name = NAME_E,
+         met_id = as.character(CBSAA),
          met_tot_pop = AHZAE001,
          met_tot_hu = AH35E001,
          met_shr_wht = AHZAE003/AHZAE001,
          met_shr_blk = AHZAE004/AHZAE001,
-         met_shr_asn = AHZAE006/AHZAE001,
-         met_shr_oth = (AHZAE005+AHZAE007+AHZAE008+AHZAE009+AHZAE010+AHZAE011)/AHZAE001,
+         met_shr_oth = (AHZAE005+AHZAE006+AHZAE007+AHZAE008+AHZAE009)/AHZAE001,
          met_shr_lat = AHZAE012/AHZAE001,
          met_shr_diff_metro_last_yr = ifelse(AHZCE001 == 0, 0, AHZCE007/AHZCE001),
          met_shr_col_grad = (AH04E022+AH04E023+AH04E024+AH04E025)/AH04E001,
@@ -57,20 +59,19 @@ acs_cbsa <- read_csv("H:/nhgis0100_csv/nhgis0100_ds233_20175_2017_cbsa.csv") %>%
          met_med_gross_rent_as_shr_inc = AH5YE001,
          met_med_own_hu_val = AH53E001) %>% 
   rename_all(.funs = tolower) %>%
-  select(gisjoin, year, cbsa, cbsaa, name, starts_with("met"))
+  select(met_id, cbsa, cbsaa, met_name, starts_with("met")) 
 
-
-#### B. Load in Neighborhood Data, Mutate Columns
+#### B. Load in Neighborhood ACS Data, Mutate Columns --------------------------
 
 #Tract level ACS estimates for 2013-2017
 acs_tract <- read_csv("H:/nhgis0100_csv/nhgis0100_ds233_20175_2017_tract.csv") %>%
   select_if(not_all_na) %>%
-  mutate(trt_tot_pop = AHZAE001,
+  mutate(trt_id = GISJOIN,
+         trt_tot_pop = AHZAE001,
          trt_tot_hu = AH35E001,
          trt_shr_wht = AHZAE003/AHZAE001,
          trt_shr_blk = AHZAE004/AHZAE001,
-         trt_shr_asn = AHZAE006/AHZAE001,
-         trt_shr_oth = (AHZAE005+AHZAE007+AHZAE008+AHZAE009+AHZAE010+AHZAE011)/AHZAE001,
+         trt_shr_oth = (AHZAE005+AHZAE006+AHZAE007+AHZAE008+AHZAE009)/AHZAE001,
          trt_shr_lat = AHZAE012/AHZAE001,
          trt_shr_diff_trtro_last_yr = ifelse(AHZCE001 == 0, 0, AHZCE007/AHZCE001),
          trt_shr_col_grad = (AH04E022+AH04E023+AH04E024+AH04E025)/AH04E001,
@@ -95,4 +96,51 @@ acs_tract <- read_csv("H:/nhgis0100_csv/nhgis0100_ds233_20175_2017_tract.csv") %
          trt_med_gross_rent_as_shr_inc = AH5YE001,
          trt_med_own_hu_val = AH53E001) %>% 
   rename_all(.funs = tolower) %>%
-  select(gisjoin, year, state, statea, county, countya, tracta, starts_with("trt"))
+  select(trt_id, state, statea, county, countya, tracta, starts_with("trt"))
+
+
+#### C. Query Neighborhood Estimates of CL Listing Activity --------------------
+
+tract_query <- "SELECT c.trt_id, c.met_id, count(d.*) AS listing_count, c.geometry
+                FROM (
+                      SELECT a.gisjoin AS trt_id, a.geometry, b.cbsafp AS met_id
+                      FROM tract17 a
+                      JOIN county17 b ON a.statefp = b.statefp AND a.countyfp = b.countyfp
+                      WHERE b.cbsafp IS NOT NULL
+                ) c
+                LEFT JOIN clean d ON ST_Contains(c.geometry, d.geometry)
+                GROUP BY c.trt_id, c.met_id, c.geometry
+                ORDER BY c.met_id"
+
+tract <- st_read(natrent, query = tract_query)
+type.convert(tract$listing_count)
+
+
+#### D. Join Tables ------------------------------------------------------------
+
+tract <- inner_join(tract, acs_tract)
+
+tract <- left_join(tract, acs_cbsa)
+
+tract <- tract %>%
+  group_by(met_id) %>%
+  mutate(met_listing_count = sum(listing_count))
+
+top100 <- tract %>%
+  select(met_id, met_name, met_listing_count) %>%
+  st_set_geometry(NULL) %>%
+  distinct() %>%
+  top_n(100, met_listing_count) %>%
+  arrange(desc(met_listing_count))
+
+
+#### E. Describe Correlations --------------------------------------------------
+
+
+lm_0 <- glm(listing_count ~ trt_tot_pop + trt_shr_blk + trt_shr_lat + trt_shr_oth +
+              met_tot_pop + met_shr_blk + met_shr_lat + met_shr_oth,
+            data = tract,
+            family = "quasipoisson")
+summary(lm_0)
+
+
