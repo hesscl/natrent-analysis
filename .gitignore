@@ -51,3 +51,6 @@ smarty_key.yaml
 
 #dashboards
 dash/*.html
+
+input/*
+output/*
