@@ -30,6 +30,7 @@ acs_cbsa <- read_csv("H:/nhgis0100_csv/nhgis0100_ds233_20175_2017_cbsa.csv") %>%
          met_id = as.character(CBSAA),
          met_tot_pop = AHZAE001,
          met_tot_hu = AH35E001,
+         met_tot_vac_hu_for_rent = AH4HE002,
          met_shr_wht = AHZAE003/AHZAE001,
          met_shr_blk = AHZAE004/AHZAE001,
          met_shr_oth = (AHZAE005+AHZAE006+AHZAE007+AHZAE008+AHZAE009)/AHZAE001,
@@ -68,6 +69,7 @@ acs_tract <- read_csv("H:/nhgis0100_csv/nhgis0100_ds233_20175_2017_tract.csv") %
   mutate(trt_id = GISJOIN,
          trt_tot_pop = AHZAE001,
          trt_tot_hu = AH35E001,
+         trt_tot_vac_hu_for_rent = AH4HE002,
          trt_shr_wht = AHZAE003/AHZAE001,
          trt_shr_blk = AHZAE004/AHZAE001,
          trt_shr_oth = (AHZAE005+AHZAE006+AHZAE007+AHZAE008+AHZAE009)/AHZAE001,
@@ -314,7 +316,7 @@ tract_no_geo <- st_drop_geometry(tract) %>% drop_na(vars)
 # make variables for boeing replication
 ## USE REL_RATIO REP RATIO IS DIFFERENT FROM BOEING
 tract_no_geo <- tract_no_geo %>% 
-  mutate(met_to_rent = met_shr_vac_hu_for_rent*met_tot_hu, vac_hu_ratio = (trt_tot_vac_hu_for_rent+1)/(met_to_rent+1)) %>% 
+  mutate(vac_hu_ratio = (trt_tot_vac_hu_for_rent+1)/(met_tot_vac_hu_for_rent+1)) %>% 
   group_by(met_id) %>% mutate(met_tot_listings= sum(listing_count), count_tracts = n()) %>% 
   ungroup() %>% 
   mutate(listing_ratio = (listing_count+1)/met_tot_listings, 
