@@ -44,13 +44,13 @@ acs_cbsa <- read_csv("H:/nhgis0100_csv/nhgis0100_ds233_20175_2017_cbsa.csv") %>%
          met_per_cap_inc = AH2RE001,
          met_lfp_rate = AH3PE002/AH3PE001,
          met_emp_rate = AH3PE004/AH3PE001,
-         #met_shr_comp_math = (AH3SE007+AH3SE044/AH3SE001),
+         met_shr_comp_math = ((AH3SE007+AH3SE044)/AH3SE001),
          met_shr_vac_hu = AH36E003/AH36E001,
          met_shr_vac_hu_for_rent = AH4HE002/AH4HE001,
          met_shr_rent_occ = AH37E003/AH37E001,
-         #met_med_num_rooms = AH4RE001,
+         met_med_num_rooms = AH4RE001,
          met_shr_sfh = AH4WE002/AH4WE001,
-         met_shr_20plus = AH4WE008+AH4WE009/AH4WE001,
+         met_shr_20plus = (AH4WE008+AH4WE009)/AH4WE001,
          met_shr_blt_post_2000 = AH4ZE004/AH4ZE001,
          met_med_gross_rent = AH5RE001,
          met_med_cont_rent = AH5LE001,
@@ -58,6 +58,7 @@ acs_cbsa <- read_csv("H:/nhgis0100_csv/nhgis0100_ds233_20175_2017_cbsa.csv") %>%
          met_med_own_hu_val = AH53E001) %>% 
   rename_all(.funs = tolower) %>%
   select(met_id, cbsa, cbsaa, met_name, starts_with("met")) 
+
 
 #### B. Load in Neighborhood ACS Data, Mutate Columns --------------------------
 
@@ -81,12 +82,12 @@ acs_tract <- read_csv("H:/nhgis0100_csv/nhgis0100_ds233_20175_2017_tract.csv") %
          trt_per_cap_inc = AH2RE001,
          trt_lfp_rate = AH3PE002/AH3PE001,
          trt_emp_rate = AH3PE004/AH3PE001,
-         #trt_shr_comp_math = (AH3SE007+AH3SE044/AH3SE001),
+         trt_shr_comp_math = ((AH3SE007+AH3SE044)/AH3SE001),
          trt_shr_vac_hu = AH36E003/AH36E001,
          trt_tot_vac_hu_for_rent = AH4HE002,
          trt_shr_vac_hu_for_rent = AH4HE002/AH4HE001,
          trt_shr_rent_occ = AH37E003/AH37E001,
-         #trt_med_num_rooms = AH4RE001,
+         trt_med_num_rooms = AH4RE001,
          trt_shr_sfh = AH4WE002/AH4WE001,
          trt_shr_20plus = (AH4WE008+AH4WE009)/AH4WE001,
          trt_shr_blt_post_2000 = AH4ZE004/AH4ZE001,
@@ -100,39 +101,64 @@ acs_tract <- read_csv("H:/nhgis0100_csv/nhgis0100_ds233_20175_2017_tract.csv") %
 
 #### C. Query Neighborhood Estimates of CL Listing Activity --------------------
 
-tract_query <- "SELECT c.trt_id, c.met_id, MIN(d.listing_loc) AS listing_loc, count(d.*) AS listing_count, c.geometry
-                FROM (
-                      SELECT a.gisjoin AS trt_id, a.geometry, b.cbsafp AS met_id
-                      FROM tract17 a
-                      JOIN county17 b ON a.statefp = b.statefp AND a.countyfp = b.countyfp
-                      WHERE b.cbsafp IS NOT NULL
-                ) c
-                LEFT JOIN clean d ON ST_Contains(c.geometry, d.geometry) WHERE d.listing_date BETWEEN '2019-01-01' and now()
-                GROUP BY c.trt_id, c.met_id, c.geometry
-                ORDER BY c.met_id"
+#query for tract aggregates of Craigslist listing
+cl_query <- "SELECT c.trt_id, c.met_id, MIN(d.listing_loc) AS listing_loc, count(d.*) AS listing_count, c.geometry
+             FROM (
+                   SELECT a.gisjoin AS trt_id, a.geometry, b.cbsafp AS met_id
+                   FROM tract17 a
+                   JOIN county17 b ON a.statefp = b.statefp AND a.countyfp = b.countyfp
+                   WHERE b.cbsafp IS NOT NULL
+             ) c
+             LEFT JOIN clean d ON ST_Contains(c.geometry, d.geometry) WHERE d.listing_date BETWEEN '2019-01-01' and ?end
+             GROUP BY c.trt_id, c.met_id, c.geometry
+             ORDER BY c.met_id"
 
-# this is to get all the tracts in those metros even where the cl counts are 0
+#query for tract aggregates of Apartments.com listings (no geom)
+apts_query <- "SELECT c.trt_id, count(d.*) AS apts_listing_count
+               FROM (
+                     SELECT a.gisjoin AS trt_id, a.geometry, b.cbsafp AS met_id
+                     FROM tract17 a
+                     JOIN county17 b ON a.statefp = b.statefp AND a.countyfp = b.countyfp
+                     WHERE b.cbsafp IS NOT NULL
+               ) c
+               LEFT JOIN apts_clean d ON ST_Contains(c.geometry, d.geometry) WHERE d.scraped_time BETWEEN '2019-01-01' and ?end
+               GROUP BY c.trt_id, c.met_id, c.geometry
+               ORDER BY c.met_id"
+
+#query for all the tracts in CBSAs even where the cl counts are 0
 full_tracts_query <- "SELECT c.trt_id, c.met_id, c.geometry
                       FROM (
-                        SELECT a.gisjoin AS trt_id, a.geometry, b.cbsafp AS met_id
-                        FROM tract17 a
-                        JOIN county17 b ON a.statefp = b.statefp AND a.countyfp = b.countyfp
-                        WHERE b.cbsafp IS NOT NULL
+                            SELECT a.gisjoin AS trt_id, a.geometry, b.cbsafp AS met_id
+                            FROM tract17 a
+                            JOIN county17 b ON a.statefp = b.statefp AND a.countyfp = b.countyfp
+                            WHERE b.cbsafp IS NOT NULL
                       ) c"
 
+#set temporal cutoff and work this into queries
+cutoff_date <- "2019-09-30"
+cl_query <- sqlInterpolate(natrent, cl_query, end = cutoff_date)
+apts_query <- sqlInterpolate(natrent, apts_query, end = cutoff_date)
 
-tract_counts <- st_read(natrent, query = tract_query)
-type.convert(tract_counts$listing_count)
 
-# we actually want to get the tracts from which we have no listings
+#submit the queries
+cl_counts <- st_read(natrent, query = cl_query)
+apts_counts <- dbGetQuery(natrent, apts_query)
+
+#join up the results
+tract_counts <- full_join(cl_counts, apts_counts)
+
+#we actually want to get the tracts from which we have no listings
 full_tracts <- st_read(natrent, query = full_tracts_query)
 tract_no_geo <- st_drop_geometry(tract_counts)
+
 # then we want to filter to only the met areas where we're collecting listings
-tract <- full_tracts %>% filter(met_id %in% unique(tract_no_geo$met_id)) %>% 
+tract <- full_tracts %>% 
+  filter(met_id %in% unique(tract_no_geo$met_id)) %>% 
   # join it to the ones where we have counts
   left_join(st_drop_geometry(tract_counts)) %>% 
   # then fill the NAs with zeros because we have no listings there
   mutate(listing_count = if_else(is.na(listing_count), 0, listing_count))
+
 
 #### D. Join Tables ------------------------------------------------------------
 
@@ -140,11 +166,9 @@ tract <- inner_join(tract, acs_tract)
 
 tract <- left_join(tract, acs_cbsa)
 
-met_id_match <- tract %>% st_drop_geometry() %>% count(met_id, listing_loc) %>% drop_na(listing_loc)  %>% group_by(met_id) %>% mutate(max = max(n))%>% ungroup() %>% filter(n==max) %>% group_by(met_id) %>% summarize(maj_listing_loc = first(listing_loc)) %>% ungroup()
-
-tract <- tract %>% left_join(met_id_match) %>% mutate(listing_loc = if_else(is.na(listing_loc), maj_listing_loc, listing_loc)) %>% select(-maj_listing_loc)
 
 #### E. Describe Correlations --------------------------------------------------
+
 tract <- tract %>%  mutate(trt_tot_vac_hu_for_rent_1 = if_else(trt_tot_vac_hu_for_rent==0, 1, trt_tot_vac_hu_for_rent))
 
 library(GGally)
