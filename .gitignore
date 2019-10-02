@@ -43,7 +43,7 @@ vignettes/*.pdf
 *.db
 
 /data/
-/etc/
+/etc/*
 /log/
 
 # API keys
