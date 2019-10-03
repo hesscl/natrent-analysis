@@ -197,12 +197,16 @@ tract <- tract %>%
   mutate(any_cl_listings = cl_listing_count > 0,
          any_apts_listings = apts_listing_count > 0)
 
+#vector for largest 100 by pop
 top100 <- tract %>%
-  select(met_id, met_name, met_tot_pop) %>%
   st_drop_geometry() %>%
-  distinct() %>%
+  distinct(met_id, met_tot_pop) %>%
   top_n(100, met_tot_pop) %>%
-  arrange(desc(met_tot_pop))
+  pull(met_id)
+
+#use vector of CBSA codes for largest 100 to filter tract sf
+tract <- tract %>%
+  filter(met_id %in% top100)
 
 
 #### E. Save to Storage -------------------------------------------------------

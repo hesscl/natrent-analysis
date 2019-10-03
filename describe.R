@@ -10,12 +10,11 @@ tract <- st_read("./output/extract/tract_listing_count_thru_sept.geojson")
 #load in tract panel
 tract_panel <- read_dta("../dissertation/metro-povtrends/panel_for_stata.dta")
 
-#check coverage, 0.17% of tracts w/o match in tract extract from natrent
-#due to small changes in ACS tracts
-tract_panel %>%
-  filter(year == 2015) %>%
-  pull(GISJOIN) %in% tract$trt_id %>% 
-  table(., useNA = "always")/nrow(tract_panel %>% filter(year == 2015))
+#check coverage, little less than 3% of tracts w/o match in tract extract from natrent
+tract %>% 
+  filter(trt_id %in% tract_panel$GISJOIN) %>%
+  pull(trt_id) %>%
+  length(.) / nrow(tract)
 
 
 #### A. Join up ---------------------------------------------------------------
@@ -25,20 +24,9 @@ tract_panel <- tract_panel %>%
   mutate(trt_id = GISJOIN) %>%
   distinct(trt_id, clust)
 
-#join data
+#join data to sf
 tract <- left_join(tract, tract_panel) %>%
   st_as_sf() 
-
-#vector for largest 100 by pop
-top100 <- tract %>%
-  st_drop_geometry() %>%
-  distinct(met_id, met_tot_pop) %>%
-  top_n(100, met_tot_pop) %>%
-  pull(met_id)
-
-#use vector of CBSA codes for largest 100 to filter tract sf
-tract <- tract %>%
-  filter(met_id %in% top100)
 
 
 #### B. Construct lambda ------------------------------------------------------
@@ -53,8 +41,8 @@ tract <- tract %>%
   ungroup() %>% 
   mutate(expected_cl_listings = met_tot_cl_listings*vac_hu_ratio,
          expected_apts_listings = met_tot_apts_listings*vac_hu_ratio,
-         cl_rel_ratio = cl_listing_count/expected_cl_listings,
-         apts_rel_ratio = apts_listing_count/expected_apts_listings) 
+         cl_lambda = cl_listing_count/expected_cl_listings,
+         apts_lambda = apts_listing_count/expected_apts_listings) 
 
 
 #### C. Look at spatial distribution of lambda and sociodemographics ----------
@@ -98,42 +86,36 @@ theme_map <- function(...) {
     )
 }
 
-#now save a function to pass to map with the vector of CBSA codes
-choro_ratios <- function(cbsa){
+#vector of 100 cbsas
+metros <- unique(tract$cbsa)
+
+#now save a function to pass to map with the vector of CBSAs
+choro_ratios <- function(metro){
   cbsa_tracts <- tract %>%
-    mutate(met_id = as.character(met_id)) %>%
-    filter(met_id == cbsa) %>%
-    select(cl_rel_ratio, apts_rel_ratio)
+    filter(cbsa == metro) 
   
-  ggplot(cbsa_tracts, aes(fill = log10(cl_rel_ratio))) +
-  geom_sf(lwd = 0.01) +
-  scale_fill_gradient2(midpoint = 0) +
-  theme_map() +
-  ggsave(filename = paste0("./output/choro/", cbsa, "_cl_rel_ratio.pdf"),
-         width = 8, height = 8, dpi = 300)  
+  cl_bc <- bestNormalize::boxcox(cbsa_tracts$cl_lambda + 1)
+  apts_bc <- bestNormalize::boxcox(cbsa_tracts$apts_lambda + 1)
+  
+  cbsa_tracts$cl_lambda_bc <- predict(cl_bc)
+  cbsa_tracts$apts_lambda_bc <- predict(apts_bc)
+  
+  cbsa_tracts <- cbsa_tracts %>%
+    select(cbsa, ends_with("lambda_bc")) %>%
+    gather(key = "measure", value = "value", -cbsa, -geometry)
+  
+  ggplot(cbsa_tracts, aes(fill = value)) +
+    facet_grid(~ measure) +
+    geom_sf(lwd = 0.01, color = "grey80") +
+    scale_fill_gradient2(midpoint = 0) +
+    theme_map() +
+    ggsave(filename = paste0("./output/choro/lambda/", 
+                             str_split_fixed(metro, "-|,|/", n = 2)[1],
+                             "_lambda.pdf"),
+           width = 12, height = 8, dpi = 300) 
 }
 
-
-map(unique(tract$met_id), choro_ratios)
-
-#Seattle CBSA lambdas
-sea_tracts <- tract %>%
-  filter(met_id == "42660") %>%
-  select(cl_rel_ratio, apts_rel_ratio) 
-
-ggplot(sea_tracts, aes(fill = log10(cl_rel_ratio))) +
-  geom_sf(lwd = 0.01) +
-  scale_fill_gradient2(midpoint = 0) +
-  theme_map() +
-  ggsave(filename = "./output/choro/sea_cl_rel_ratio.pdf",
-         width = 8, height = 8, dpi = 300)
-
-ggplot(sea_tracts, aes(fill = log10(apts_rel_ratio))) +
-  geom_sf(lwd = 0.01) +
-  scale_fill_gradient2(midpoint = 0) +
-  theme_map() +
-  ggsave(filename = "./output/choro/sea_apts_rel_ratio.pdf",
-         width = 8, height = 8, dpi = 300)
+map(metros, choro_ratios)
 
 
 
