@@ -8,24 +8,26 @@ library(haven)
 tract <- st_read("./output/extract/tract_listing_count_thru_sept.geojson")
 
 #load in tract panel
-tract_panel <- read_dta("../dissertation/metro-povtrends/panel_for_stata.dta")
-
-#check coverage, little less than 3% of tracts w/o match in tract extract from natrent
-tract %>% 
-  filter(trt_id %in% tract_panel$GISJOIN) %>%
-  pull(trt_id) %>%
-  length(.) / nrow(tract)
+tract_clust <- read_csv("./input/tract_clust.csv")
 
 
 #### A. Join up ---------------------------------------------------------------
 
 #mutate a common name key for join, reduce table to necessary columns
-tract_panel <- tract_panel %>%
-  mutate(trt_id = GISJOIN) %>%
+tract_clust <- tract_clust %>%
+  mutate(trt_id = GISJOIN,
+         clust = as.character(clust)) %>%
   distinct(trt_id, clust)
 
+#check coverage, 2.8% of tracts w/o match in tract extract from natrent
+#probably should re-run cluster analysis based on ACS shp + estimates
+tract %>% 
+  filter(trt_id %in% tract_clust$trt_id) %>%
+  pull(trt_id) %>%
+  length(.) / nrow(tract)
+
 #join data to sf
-tract <- left_join(tract, tract_panel) %>%
+tract <- left_join(tract, tract_clust) %>%
   st_as_sf() 
 
 
@@ -94,11 +96,8 @@ choro_ratios <- function(metro){
   cbsa_tracts <- tract %>%
     filter(cbsa == metro) 
   
-  cl_bc <- bestNormalize::boxcox(cbsa_tracts$cl_lambda + 1)
-  apts_bc <- bestNormalize::boxcox(cbsa_tracts$apts_lambda + 1)
-  
-  cbsa_tracts$cl_lambda_bc <- predict(cl_bc)
-  cbsa_tracts$apts_lambda_bc <- predict(apts_bc)
+  cbsa_tracts$cl_lambda_bc <- forecast::BoxCox(cbsa_tracts$cl_lambda + 1, lambda = 0)
+  cbsa_tracts$apts_lambda_bc <- forecast::BoxCox(cbsa_tracts$apts_lambda + 1, lambda = 0)
   
   cbsa_tracts <- cbsa_tracts %>%
     select(cbsa, ends_with("lambda_bc")) %>%
@@ -107,7 +106,7 @@ choro_ratios <- function(metro){
   ggplot(cbsa_tracts, aes(fill = value)) +
     facet_grid(~ measure) +
     geom_sf(lwd = 0.01, color = "grey80") +
-    scale_fill_gradient2(midpoint = 0) +
+    scale_fill_gradient2(midpoint = 1) +
     theme_map() +
     ggsave(filename = paste0("./output/choro/lambda/", 
                              str_split_fixed(metro, "-|,|/", n = 2)[1],

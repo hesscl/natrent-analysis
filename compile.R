@@ -5,8 +5,8 @@ library(yaml)
 library(DBI)
 library(sf)
 
-#store credentials at base dir of UDrive (H:/) as YAML
-cred <- read_yaml("H:/natrent0.yaml")
+#store credentials at base dir of natrent-city-sub as YAML
+cred <- read_yaml("./natrent0.yaml")
 
 #create a database connection
 natrent <- dbConnect(
