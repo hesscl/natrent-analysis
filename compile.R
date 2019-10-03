@@ -150,7 +150,7 @@ apts_query <- "SELECT f.trt_id, f.met_id, COUNT(*) AS apts_listing_count
               ORDER BY f.met_id"
 
 #query for all the tracts in CBSAs even where the cl counts are 0
-full_tracts_query <- "SELECT c.trt_id, c.met_id, c.geometry
+full_tracts_query <- "SELECT c.trt_id, c.met_id, ST_TRANSFORM(c.geometry, 4326)
                       FROM (
                             SELECT a.gisjoin AS trt_id, a.geometry, b.cbsafp AS met_id
                             FROM tract17 a
