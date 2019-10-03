@@ -88,6 +88,7 @@ theme_map <- function(...) {
     )
 }
 
+
 #vector of 100 cbsas
 metros <- unique(tract$cbsa)
 
@@ -96,17 +97,18 @@ choro_ratios <- function(metro){
   cbsa_tracts <- tract %>%
     filter(cbsa == metro) 
   
-  cbsa_tracts$cl_lambda_bc <- forecast::BoxCox(cbsa_tracts$cl_lambda + 1, lambda = 0)
-  cbsa_tracts$apts_lambda_bc <- forecast::BoxCox(cbsa_tracts$apts_lambda + 1, lambda = 0)
-  
   cbsa_tracts <- cbsa_tracts %>%
-    select(cbsa, ends_with("lambda_bc")) %>%
-    gather(key = "measure", value = "value", -cbsa, -geometry)
+    select(cbsa, ends_with("lambda")) %>%
+    gather(key = "measure", value = "value", -cbsa, -geometry) %>%
+    mutate(trunc_value = ifelse(value > 2, 2, value))
   
-  ggplot(cbsa_tracts, aes(fill = value)) +
+  ggplot(cbsa_tracts, aes(fill = trunc_value)) +
     facet_grid(~ measure) +
     geom_sf(lwd = 0.01, color = "grey80") +
-    scale_fill_gradient2(midpoint = 1) +
+    scale_fill_gradientn(colours = c(scales::muted("red"), "white", scales::muted("blue")), 
+                         values = scales::rescale(c(0, 1, 2)),
+                         guide = "colorbar", 
+                         limits= c(0, 2)) +
     theme_map() +
     ggsave(filename = paste0("./output/choro/lambda/", 
                              str_split_fixed(metro, "-|,|/", n = 2)[1],
