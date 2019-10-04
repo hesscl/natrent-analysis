@@ -82,12 +82,12 @@ theme_map <- function(...) {
       legend.position = "bottom",
       legend.key.width = unit(.75, "inch"),
       legend.key.height = unit(.2, "inch"), 
-      legend.title = element_text(hjust = -.75, vjust = .75),
+      legend.title = element_text(hjust = -.75, vjust = .95),
+      legend.text = element_text(angle = 45, hjust = 1, vjust = 1),
       
       ...
     )
 }
-
 
 #vector of 100 cbsas
 metros <- unique(tract$cbsa)
@@ -100,16 +100,21 @@ choro_ratios <- function(metro){
   cbsa_tracts <- cbsa_tracts %>%
     select(cbsa, ends_with("lambda")) %>%
     gather(key = "measure", value = "value", -cbsa, -geometry) %>%
-    mutate(trunc_value = ifelse(value > 2, 2, value))
+    mutate(measure = ifelse(measure == "cl_lambda", "Craigslist", measure),
+           measure = ifelse(measure == "apts_lambda", "Apartments.com", measure),
+           trunc_value = ifelse(value > 2, 2, value))
   
   ggplot(cbsa_tracts, aes(fill = trunc_value)) +
     facet_grid(~ measure) +
-    geom_sf(lwd = 0.01, color = "grey80") +
+    geom_sf(lwd = 0.0001, color = "grey60") +
     scale_fill_gradientn(colours = c(scales::muted("red"), "white", scales::muted("blue")), 
+                         labels = c("Under", "", "Parity", "", "Over"),
+                         breaks = c(0, .5, 1, 1.5, 2),
                          values = scales::rescale(c(0, 1, 2)),
                          guide = "colorbar", 
                          limits= c(0, 2)) +
     theme_map() +
+    labs(fill = "Truncated Lambda") +
     ggsave(filename = paste0("./output/choro/lambda/", 
                              str_split_fixed(metro, "-|,|/", n = 2)[1],
                              "_lambda.pdf"),
