@@ -3,6 +3,9 @@
 library(tidyverse)
 library(sf)
 library(haven)
+library(biscale)
+library(cowplot)
+library(patchwork)
 
 #load in tract extract geojson
 tract <- st_read("./output/extract/tract_listing_count_thru_sept.geojson")
@@ -92,7 +95,8 @@ theme_map <- function(...) {
 #vector of 100 cbsas
 metros <- unique(tract$cbsa)
 
-#now save a function to pass to map with the vector of CBSAs
+#Univariate choro: save a function that takes a cbsa code and maps its
+#lambdas for CL and apartments.com
 choro_ratios <- function(metro){
   cbsa_tracts <- tract %>%
     filter(cbsa == metro) 
@@ -121,7 +125,65 @@ choro_ratios <- function(metro){
            width = 12, height = 8, dpi = 300) 
 }
 
+#produce the chroropleth for each metropolitan area by mapping
+#all unique metro codes to choro_ratio
 map(metros, choro_ratios)
+
+#Bivariate choro: save another function, this time for bivariate
+#map of lambda (discrete cats) and racial composition
+choro_bivar <- function(metro){
+ 
+  #a little bit of data preparation
+  cbsa_tracts <- tract %>%
+    filter(cbsa == metro) %>%
+    mutate(under_cl = 1 - ifelse(cl_lambda > 1, 1, cl_lambda),
+           under_apts = 1 - ifelse(apts_lambda > 1, 1, apts_lambda))
+  
+  #add the biclass col using fn from biscale lib
+  under_tracts <- bi_class(cbsa_tracts, 
+                          x = under_cl, y = under_apts,
+                          style = "jenks", dim = 3)
+
+  #make the legends
+  under_legend <- bi_legend(pal = "DkCyan",
+                      dim = 3,
+                      xlab = "Craigslist",
+                      ylab = "Apts.com",
+                      size = 8) +
+    theme(legend.text = element_text(family = "Helvetica"))
+  
+  #make the under map
+  under_choro <- ggplot() +
+    geom_sf(data = under_tracts, aes(fill = bi_class), 
+            color = "white", size = 0.1, show.legend = FALSE) +
+    bi_scale_fill(pal = "DkCyan", dim = 3) +
+    labs(title = paste("Underrepresented Neighborhoods in", metro)) +
+    bi_theme() +
+    theme(plot.title = element_text(size = 14, family = "Helvetica"))
+  
+  #assemble the map and legend
+  under_gg <- ggdraw() +
+    draw_plot(under_choro, 0, 0, 1, 1) +
+    draw_plot(under_legend, 0.025, 0.025, 0.2, 0.2)
+  
+  #save to disk
+  save_plot(filename = paste0("./output/choro/bivar/", 
+                              str_split_fixed(metro, "-|,|/", n = 2)[1],
+                              "_bivar.pdf"),
+            plot = under_gg,
+            base_height = 8, base_asp = 1.25) 
+  }
+
+map(metros, choro_bivar)
+
+
+
+
+
+
+
+
+
 
 
 
