@@ -5,6 +5,9 @@ library(yaml)
 library(DBI)
 library(sf)
 
+#set wd to project base folder
+setwd("R:/Project/natrent-city-sub")
+
 #store credentials at base dir of natrent-city-sub as YAML
 cred <- read_yaml("./natrent0.yaml")
 
@@ -71,11 +74,14 @@ acs_tract <- read_csv("./input/nhgis0100_csv/nhgis0100_ds233_20175_2017_tract.cs
          trt_tot_pop = AHZAE001,
          trt_tot_hu = AH35E001,
          trt_tot_vac_hu_for_rent = AH4HE002,
+         trt_tot_wht = AHZAE003,
          trt_shr_wht = AHZAE003/AHZAE001,
+         trt_tot_blk = AHZAE004,
          trt_shr_blk = AHZAE004/AHZAE001,
          trt_shr_oth = (AHZAE005+AHZAE006+AHZAE007+AHZAE008+AHZAE009)/AHZAE001,
+         trt_tot_lat = AHZAE012,
          trt_shr_lat = AHZAE012/AHZAE001,
-         trt_shr_diff_trtro_last_yr = ifelse(AHZCE001 == 0, 0, AHZCE007/AHZCE001),
+         trt_shr_diff_metro_last_yr = ifelse(AHZCE001 == 0, 0, AHZCE007/AHZCE001),
          trt_shr_col_grad = (AH04E022+AH04E023+AH04E024+AH04E025)/AH04E001,
          trt_shr_deep_pov = ifelse(AH1JE001 == 0, 0, AH1JE002/AH1JE001),
          trt_shr_pov = ifelse(AH1JE001 == 0, 0, (AH1JE002+AH1JE003)/AH1JE001),
@@ -105,9 +111,14 @@ acs_tract <- read_csv("./input/nhgis0100_csv/nhgis0100_ds233_20175_2017_tract.cs
 #### C. Query Neighborhood Estimates of CL Listing Activity --------------------
 
 #query for tract aggregates of distinct Craigslist listings
-cl_query <- "SELECT f.trt_id, f.met_id, COUNT(*) AS cl_listing_count
+cl_query <- "SELECT f.trt_id, f.met_id, COUNT(*) AS cl_listing_count, QUANTILE(f.clean_rent, .5) AS cl_median,
+                    QUANTILE(CASE WHEN f.clean_beds = 0 THEN f.clean_rent END, .50) AS cl_median_0B,
+                    QUANTILE(CASE WHEN f.clean_beds = 1 THEN f.clean_rent END, .50) AS cl_median_1B,
+                    QUANTILE(CASE WHEN f.clean_beds = 2 THEN f.clean_rent END, .50) AS cl_median_2B,
+                    QUANTILE(CASE WHEN f.clean_beds = 3 THEN f.clean_rent END, .50) AS cl_median_3B,
+                    QUANTILE(CASE WHEN f.clean_beds >= 4 THEN f.clean_rent END, .50) AS cl_median_4PlusB
              FROM (
-                   SELECT DISTINCT e.trt_id, e.met_id, e.clean_beds, e.clean_sqft, e.lng, e.lat
+                   SELECT DISTINCT e.trt_id, e.met_id, e.clean_beds, e.clean_sqft, e.clean_rent, e.lng, e.lat
                    FROM (
                          SELECT c.trt_id, c.met_id, d.listing_date, d.clean_beds, d.clean_sqft, d.clean_rent,
                                 ROUND(CAST(ST_X(ST_TRANSFORM(d.geometry, 4326)) as numeric), 3) as lng, 
@@ -128,16 +139,21 @@ cl_query <- "SELECT f.trt_id, f.met_id, COUNT(*) AS cl_listing_count
             ORDER BY f.met_id"
 
 #query for tract aggregates of distinct Apts.com listings
-apts_query <- "SELECT f.trt_id, f.met_id, COUNT(*) AS apts_listing_count
+apts_query <- "SELECT f.trt_id, f.met_id, COUNT(*) AS apts_listing_count, QUANTILE(clean_rent, .50) AS apts_median,
+                    QUANTILE(CASE WHEN f.clean_beds = 0 THEN f.clean_rent END, .50) AS apts_median_0B,
+                    QUANTILE(CASE WHEN f.clean_beds = 1 THEN f.clean_rent END, .50) AS apts_median_1B,
+                    QUANTILE(CASE WHEN f.clean_beds = 2 THEN f.clean_rent END, .50) AS apts_median_2B,
+                    QUANTILE(CASE WHEN f.clean_beds = 3 THEN f.clean_rent END, .50) AS apts_median_3B,
+                    QUANTILE(CASE WHEN f.clean_beds >= 4 THEN f.clean_rent END, .50) AS apts_median_4PlusB
                FROM (
-                     SELECT DISTINCT e.trt_id, e.met_id, e.clean_beds, e.clean_sqft, e.lng, e.lat
+                     SELECT DISTINCT e.trt_id, e.met_id, e.clean_beds, e.clean_sqft, e.clean_rent, e.lng, e.lat
                      FROM (
                            SELECT c.trt_id, c.met_id, d.scraped_time, d.clean_beds, d.clean_sqft, d.clean_rent,
                                   ROUND(CAST(ST_X(ST_TRANSFORM(d.geometry, 4326)) as numeric), 3) as lng, 
                                   ROUND(CAST(ST_Y(ST_TRANSFORM(d.geometry, 4326)) as numeric), 3) as lat
                            FROM (
                                  SELECT a.gisjoin AS trt_id, a.geometry, b.cbsafp AS met_id
-                                 FROM tract17 a
+                                 FROM tract10 a
                                  JOIN county17 b ON a.statefp = b.statefp AND a.countyfp = b.countyfp
                                  WHERE b.cbsafp IS NOT NULL
                            ) c
@@ -159,7 +175,7 @@ full_tracts_query <- "SELECT c.trt_id, c.met_id, ST_TRANSFORM(c.geometry, 4326)
                       ) c"
 
 #set temporal cutoff and work this into queries
-cutoff_date <- "2019-09-30"
+cutoff_date <- "2019-12-31"
 cl_query <- sqlInterpolate(natrent, cl_query, end = cutoff_date)
 apts_query <- sqlInterpolate(natrent, apts_query, end = cutoff_date)
 
@@ -198,22 +214,18 @@ tract <- tract %>%
          any_apts_listings = apts_listing_count > 0)
 
 #vector for largest 100 by pop
-top100 <- tract %>%
-  st_drop_geometry() %>%
-  distinct(met_id, met_tot_pop) %>%
-  top_n(100, met_tot_pop) %>%
-  pull(met_id)
-
-#use vector of CBSA codes for largest 100 to filter tract sf
-tract <- tract %>%
-  filter(met_id %in% top100)
-
+#top100 <- tract %>%
+#  st_drop_geometry() %>%
+#  distinct(met_id, met_tot_pop) %>%
+#  top_n(100, met_tot_pop) %>%
+#  pull(met_id)
 
 #### E. Save to Storage -------------------------------------------------------
 
-st_write(tract, "./output/extract/tract_listing_count_thru_sept.geojson", delete_dsn = T)
+st_write(tract, "./output/extract/tract_listing_count_thru_2019.geojson", delete_dsn = T)
 
 flat_file <- st_drop_geometry(tract)
 
-write_csv(flat_file, "./output/extract/tract_listing_count_thru_sept.csv")
+write_csv(flat_file, "./output/extract/tract_listing_count_thru_2019.csv")
+
 

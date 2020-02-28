@@ -5,13 +5,15 @@ library(sf)
 library(haven)
 library(biscale)
 library(cowplot)
-library(patchwork)
+
+#working directory = repo base dir
+setwd("R:/Project/natrent-city-sub")
 
 #load in tract extract geojson
-tract <- st_read("./output/extract/tract_listing_count_thru_sept.geojson")
+tract <- st_read("./output/extract/tract_listing_count_thru_2019.geojson")
 
 #load in tract panel
-tract_clust <- read_csv("./input/tract_clust.csv")
+tract_clust <- read_csv("./input/tracts_clust_zscore.csv")
 
 
 #### A. Join up ---------------------------------------------------------------
@@ -22,6 +24,19 @@ tract_clust <- tract_clust %>%
          clust = as.character(clust)) %>%
   distinct(trt_id, clust)
 
+#join data to sf
+tract <- left_join(tract, tract_clust) %>%
+  st_as_sf() 
+
+top100 <- tract %>%
+  st_drop_geometry() %>%
+  distinct(met_id, met_tot_pop) %>%
+  top_n(100, met_tot_pop) %>%
+  pull(met_id)
+
+tract <- tract %>%
+  filter(met_id %in% top100)
+
 #check coverage, 2.8% of tracts w/o match in tract extract from natrent
 #probably should re-run cluster analysis based on ACS shp + estimates
 tract %>% 
@@ -29,9 +44,15 @@ tract %>%
   pull(trt_id) %>%
   length(.) / nrow(tract)
 
-#join data to sf
-tract <- left_join(tract, tract_clust) %>%
-  st_as_sf() 
+#metros where clusters do not cover 100%
+tract %>% 
+  st_drop_geometry() %>% 
+  group_by(met_id, cbsa) %>% 
+  summarize(n_na = sum(is.na(clust)),
+            shr = sum(is.na(clust))/n()) %>% 
+  filter(shr > 0) %>%
+  arrange(desc(shr)) %>%
+  as.data.frame()
 
 
 #### B. Construct lambda ------------------------------------------------------
@@ -50,9 +71,9 @@ tract <- tract %>%
          apts_lambda = apts_listing_count/expected_apts_listings) 
 
 
-#### C. Look at spatial distribution of lambda and sociodemographics ----------
+#### C. Map spatial distribution of lambda  -----------------------------------
 
-#first, reproject the tract sf to better output CRS (pseudo mercator)
+#first, reproject the tract sf to better output CRS (web mercator)
 tract <- st_transform(tract, 3857)
 
 #now save a map theme helper fn
@@ -93,7 +114,7 @@ theme_map <- function(...) {
 }
 
 #vector of 100 cbsas
-metros <- unique(tract$cbsa)
+metros <- unique(tract$cbsa) %>% sort()
 
 #Univariate choro: save a function that takes a cbsa code and maps its
 #lambdas for CL and apartments.com
@@ -110,7 +131,7 @@ choro_ratios <- function(metro){
   
   ggplot(cbsa_tracts, aes(fill = trunc_value)) +
     facet_grid(~ measure) +
-    geom_sf(lwd = 0.0001, color = "grey60") +
+    geom_sf(lwd = 0.0001, color = NA) +
     scale_fill_gradientn(colours = c(scales::muted("red"), "white", scales::muted("blue")), 
                          labels = c("Under", "", "Parity", "", "Over"),
                          breaks = c(0, .5, 1, 1.5, 2),
@@ -142,7 +163,7 @@ choro_bivar <- function(metro){
   #add the biclass col using fn from biscale lib
   under_tracts <- bi_class(cbsa_tracts, 
                           x = under_cl, y = under_apts,
-                          style = "jenks", dim = 3)
+                          style = "equal", dim = 3)
 
   #make the legends
   under_legend <- bi_legend(pal = "DkCyan",
@@ -155,7 +176,7 @@ choro_bivar <- function(metro){
   #make the under map
   under_choro <- ggplot() +
     geom_sf(data = under_tracts, aes(fill = bi_class), 
-            color = "white", size = 0.1, show.legend = FALSE) +
+            color = NA, size = 0.1, show.legend = FALSE) +
     bi_scale_fill(pal = "DkCyan", dim = 3) +
     labs(title = paste("Underrepresented Neighborhoods in", metro)) +
     bi_theme() +
@@ -174,18 +195,118 @@ choro_bivar <- function(metro){
             base_height = 8, base_asp = 1.25) 
   }
 
+#produce the chroropleth for each metropolitan area by mapping
+#all unique metro codes to choro_bivar
 map(metros, choro_bivar)
 
 
+#### D. Map median rent spatial distribution -----------------------------------
+
+choro_med_rent <- function(metro){
+  
+  #a little bit of data preparation
+  cbsa_tracts <- tract %>%
+    filter(cbsa == metro) 
+  
+  #pivot longer so we can facet by listing source
+  cbsa_tracts <- cbsa_tracts %>%
+    select(cbsa, ends_with("median")) %>%
+    gather(key = "measure", value = "value", -cbsa, -geometry) %>%
+    mutate(measure = ifelse(measure == "cl_median", "Craigslist", measure),
+           measure = ifelse(measure == "apts_median", "Apartments.com", measure))
+  
+  #make the map for metro, save to disk
+  ggplot(cbsa_tracts, aes(fill = value)) +
+    facet_grid(~ measure) +
+    geom_sf(lwd = 0.0001, color = NA) +
+    scale_fill_viridis_c(labels = scales::dollar) +
+    theme_map() +
+    labs(fill = "Median Rent") +
+    ggsave(filename = paste0("./output/choro/med rent/", 
+                             str_split_fixed(metro, "-|,|/", n = 2)[1],
+                             "_med_rent.pdf"),
+           width = 12, height = 8, dpi = 300) 
+}
+
+map(metros, choro_med_rent)
+
+choro_med_rent_1B <- function(metro){
+  
+  #a little bit of data preparation
+  cbsa_tracts <- tract %>%
+    filter(cbsa == metro) 
+  
+  #pivot longer so we can facet by listing source
+  cbsa_tracts <- cbsa_tracts %>%
+    select(cbsa, ends_with("median_1B")) %>%
+    gather(key = "measure", value = "value", -cbsa, -geometry) %>%
+    mutate(measure = ifelse(measure == "cl_median_1b", "Craigslist", measure),
+           measure = ifelse(measure == "apts_median_1b", "Apartments.com", measure))
+  
+  #make the map for metro, save to disk
+  ggplot(cbsa_tracts, aes(fill = value)) +
+    facet_grid(~ measure) +
+    geom_sf(lwd = 0.0001, color = NA) +
+    scale_fill_viridis_c(labels = scales::dollar) +
+    theme_map() +
+    labs(fill = "Median Rent") +
+    ggsave(filename = paste0("./output/choro/med rent 1B/", 
+                             str_split_fixed(metro, "-|,|/", n = 2)[1],
+                             "_med_rent_1B.pdf"),
+           width = 12, height = 8, dpi = 300) 
+}
+
+map(metros, choro_med_rent_1B)
 
 
+#### E. Pivot data longer by platform -----------------------------------------
+
+cl_mdata <- tract %>%
+  select(everything(), -apts_lambda) %>%
+  mutate(platform = "Craigslist") %>%
+  rename(lambda = cl_lambda,
+         med_rent = cl_median)
+
+apts_mdata <- tract %>%
+  select(everything(), -cl_lambda) %>%
+  mutate(platform = "Apartments.com") %>%
+  rename(lambda = apts_lambda,
+         med_rent = apts_median)
+
+tract_mdata <- bind_rows(cl_mdata, apts_mdata) %>%
+  group_by(met_id) %>%
+  mutate(dis_blk_wht = (.5) * sum(abs(trt_tot_blk/sum(trt_tot_blk) - 
+                                        trt_tot_wht/sum(trt_tot_wht)))) %>%
+  ungroup()
 
 
+#### F. Correlation of rents between platforms --------------------------------
+
+tract_mdata %>%
+  st_drop_geometry() %>%
+  filter(!is.na(clust)) %>%
+  group_by(platform, clust) %>%
+  summarize(mean_diff = mean(med_rent - trt_med_gross_rent, na.rm = T),
+            mean_pct_diff = mean((med_rent - trt_med_gross_rent)/trt_med_gross_rent, na.rm = T),
+            correlation = cor(med_rent, trt_med_gross_rent, use = "pairwise.complete.obs"))
+
+tract_mdata %>%
+  st_drop_geometry() %>%
+  group_by(met_name) %>%
+  summarize(correlation = cor(med_rent, trt_med_gross_rent, use = "pairwise.complete.obs")) %>%
+  arrange(desc(correlation)) %>%
+  as.data.frame()
+
+tract_mdata %>%
+  st_drop_geometry() %>%
+  group_by(platform, met_name) %>%
+  summarize(correlation = cor(med_rent, trt_med_gross_rent, use = "pairwise.complete.obs")) %>%
+  arrange(desc(correlation)) %>%
+  as.data.frame()
 
 
+#### G. Save data for modeling -------------------------------------------------
 
-
-
-
-
+#save data for models
+save(tract_mdata, file = "./output/mdata/tract_mdata.RData")
 
