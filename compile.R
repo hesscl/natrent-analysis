@@ -25,42 +25,46 @@ natrent <- dbConnect(
 not_all_na <- function(x) any(!is.na(x))
 
 
-#### A. Load in Metropolitan ACS Data, Mutate Columns --------------------------
+#### A. Load in Metropolitan ACS Data, Mutate Columns -------------------------
 
 #CBSA level ACS estimates for 2013-2017
-acs_cbsa <- read_csv("./input/nhgis0100_csv/nhgis0100_ds233_20175_2017_cbsa.csv") %>%
+acs_cbsa <- read_csv("./input/nhgis0137_csv/nhgis0137_ds239_20185_2018_cbsa.csv") %>%
   select_if(not_all_na) %>%
   mutate(met_name = NAME_E,
          met_id = as.character(CBSAA),
-         met_tot_pop = AHZAE001,
-         met_tot_hu = AH35E001,
-         met_tot_vac_hu_for_rent = AH4HE002,
-         met_shr_wht = AHZAE003/AHZAE001,
-         met_shr_blk = AHZAE004/AHZAE001,
-         met_shr_oth = (AHZAE005+AHZAE006+AHZAE007+AHZAE008+AHZAE009)/AHZAE001,
-         met_shr_lat = AHZAE012/AHZAE001,
-         met_shr_diff_metro_last_yr = ifelse(AHZCE001 == 0, 0, AHZCE007/AHZCE001),
-         met_shr_col_grad = (AH04E022+AH04E023+AH04E024+AH04E025)/AH04E001,
-         met_shr_deep_pov = ifelse(AH1JE001 == 0, 0, AH1JE002/AH1JE001),
-         met_shr_pov = ifelse(AH1JE001 == 0, 0, (AH1JE002+AH1JE003)/AH1JE001),
-         met_shr_2xfpl = ifelse(AH1JE001 == 0, 0, AH1JE008/AH1JE001),
-         met_med_hh_inc = AH1PE001,
-         met_shr_hh_pubasst = AH19E002/AH19E001,
-         met_per_cap_inc = AH2RE001,
-         met_lfp_rate = AH3PE002/AH3PE001,
-         met_emp_rate = AH3PE004/AH3PE001,
-         met_shr_comp_math = ((AH3SE007+AH3SE044)/AH3SE001),
-         met_shr_vac_hu = AH36E003/AH36E001,
-         met_shr_vac_hu_for_rent = AH4HE002/AH4HE001,
-         met_shr_rent_occ = AH37E003/AH37E001,
-         met_med_num_rooms = AH4RE001,
-         met_shr_sfh = AH4WE002/AH4WE001,
-         met_shr_20plus = (AH4WE008+AH4WE009)/AH4WE001,
-         met_shr_blt_post_2000 = AH4ZE004/AH4ZE001,
-         met_med_gross_rent = AH5RE001,
-         met_med_cont_rent = AH5LE001,
-         met_med_gross_rent_as_shr_inc = AH5YE001,
-         met_med_own_hu_val = AH53E001) %>% 
+         met_tot_pop = AJWME001,
+         met_tot_hu = AJ1SE001,
+         met_tot_vac = AJ1TE003,
+         met_tot_vac_hu_for_rent = AJ14E002,
+         met_tot_wht = AJWVE003,
+         met_tot_blk = AJWVE004,
+         met_tot_oth = AJWVE005+AJWVE006+AJWVE007+AJWVE008+AJWVE009,
+         met_tot_lat = AJWVE012,
+         met_shr_wht = AJWVE003/AJWVE001,
+         met_shr_blk = AJWVE004/AJWVE001,
+         met_shr_oth = (AJWVE005+AJWVE006+AJWVE007+AJWVE008+AJWVE009)/AJWVE001,
+         met_shr_lat = AJWVE012/AJWVE001,
+         met_shr_diff_metro_last_yr = ifelse(AJWXE001 == 0, 0, AJWXE007/AJWXE001),
+         met_shr_col_grad = (AJYPE022+AJYPE023+AJYPE024+AJYPE025)/AJYPE001,
+         met_shr_deep_pov = ifelse(AJY4E001 == 0, 0, AJY4E002/AJY4E001),
+         met_shr_pov = ifelse(AJY4E001 == 0, 0, (AJY4E002+AJY4E003)/AJY4E001),
+         met_shr_2xfpl = ifelse(AJY4E001 == 0, 0, AJY4E008/AJY4E001),
+         met_med_hh_inc = AJZAE001,
+         met_shr_hh_pubasst = AJZUE002/AJZUE001,
+         met_per_cap_inc = AJ0EE001,
+         met_lfp_rate = AJ1CE002/AJ1CE001,
+         met_emp_rate = AJ1CE004/AJ1CE001,
+         met_shr_comp_math = ((AJ1FE007+AJ1FE044)/AJ1FE001),
+         met_shr_vac_hu = AJ1TE003/AJ1TE001,
+         met_shr_vac_hu_for_rent = AJ14E002/AJ14E001,
+         met_shr_rent_occ = AJ1UE003/AJ1UE001,
+         met_shr_sfh = AJ2JE002/AJ2JE001,
+         met_shr_20plus = (AJ2JE008+AJ2JE009)/AJ2JE001,
+         met_shr_blt_post_2000 = AJ2ME004/AJ2ME001,
+         met_med_gross_rent = AJ3EE001,
+         met_med_cont_rent = AJ28E001,
+         met_med_gross_rent_as_shr_inc = AJ3LE001,
+         met_med_own_hu_val = AJ3QE001) %>% 
   rename_all(.funs = tolower) %>%
   select(met_id, cbsa, cbsaa, met_name, starts_with("met")) 
 
@@ -68,47 +72,48 @@ acs_cbsa <- read_csv("./input/nhgis0100_csv/nhgis0100_ds233_20175_2017_cbsa.csv"
 #### B. Load in Neighborhood ACS Data, Mutate Columns --------------------------
 
 #Tract level ACS estimates for 2013-2017
-acs_tract <- read_csv("./input/nhgis0100_csv/nhgis0100_ds233_20175_2017_tract.csv") %>%
+acs_tract <- read_csv("./input/nhgis0137_csv/nhgis0137_ds239_20185_2018_tract.csv") %>%
   select_if(not_all_na) %>%
-  mutate(trt_id = GISJOIN,
-         trt_tot_pop = AHZAE001,
-         trt_tot_hu = AH35E001,
-         trt_tot_vac_hu_for_rent = AH4HE002,
-         trt_tot_wht = AHZAE003,
-         trt_shr_wht = AHZAE003/AHZAE001,
-         trt_tot_blk = AHZAE004,
-         trt_shr_blk = AHZAE004/AHZAE001,
-         trt_shr_oth = (AHZAE005+AHZAE006+AHZAE007+AHZAE008+AHZAE009)/AHZAE001,
-         trt_tot_lat = AHZAE012,
-         trt_shr_lat = AHZAE012/AHZAE001,
-         trt_shr_diff_metro_last_yr = ifelse(AHZCE001 == 0, 0, AHZCE007/AHZCE001),
-         trt_shr_col_grad = (AH04E022+AH04E023+AH04E024+AH04E025)/AH04E001,
-         trt_shr_deep_pov = ifelse(AH1JE001 == 0, 0, AH1JE002/AH1JE001),
-         trt_shr_pov = ifelse(AH1JE001 == 0, 0, (AH1JE002+AH1JE003)/AH1JE001),
-         trt_shr_2xfpl = ifelse(AH1JE001 == 0, 0, AH1JE008/AH1JE001),
-         trt_med_hh_inc = AH1PE001,
-         trt_shr_hh_pubasst = AH19E002/AH19E001,
-         trt_per_cap_inc = AH2RE001,
-         trt_lfp_rate = AH3PE002/AH3PE001,
-         trt_emp_rate = AH3PE004/AH3PE001,
-         trt_shr_comp_math = ((AH3SE007+AH3SE044)/AH3SE001),
-         trt_shr_vac_hu = AH36E003/AH36E001,
-         trt_tot_vac_hu_for_rent = AH4HE002,
-         trt_shr_vac_hu_for_rent = AH4HE002/AH4HE001,
-         trt_shr_rent_occ = AH37E003/AH37E001,
-         trt_med_num_rooms = AH4RE001,
-         trt_shr_sfh = AH4WE002/AH4WE001,
-         trt_shr_20plus = (AH4WE008+AH4WE009)/AH4WE001,
-         trt_shr_blt_post_2000 = AH4ZE004/AH4ZE001,
-         trt_med_gross_rent = AH5RE001,
-         trt_med_cont_rent = AH5LE001,
-         trt_med_gross_rent_as_shr_inc = AH5YE001,
-         trt_med_own_hu_val = AH53E001) %>% 
+  mutate(trt_name = NAME_E,
+         trt_id = as.character(GISJOIN),
+         trt_tot_pop = AJWME001,
+         trt_tot_hu = AJ1SE001,
+         trt_tot_vac = AJ1TE003,
+         trt_tot_vac_hu_for_rent = AJ14E002,
+         trt_tot_wht = AJWVE003,
+         trt_tot_blk = AJWVE004,
+         trt_tot_oth = AJWVE005+AJWVE006+AJWVE007+AJWVE008+AJWVE009,
+         trt_tot_lat = AJWVE012,
+         trt_shr_wht = AJWVE003/AJWVE001,
+         trt_shr_blk = AJWVE004/AJWVE001,
+         trt_shr_oth = (AJWVE005+AJWVE006+AJWVE007+AJWVE008+AJWVE009)/AJWVE001,
+         trt_shr_lat = AJWVE012/AJWVE001,
+         trt_shr_diff_metro_last_yr = ifelse(AJWXE001 == 0, 0, AJWXE007/AJWXE001),
+         trt_shr_col_grad = (AJYPE022+AJYPE023+AJYPE024+AJYPE025)/AJYPE001,
+         trt_shr_deep_pov = ifelse(AJY4E001 == 0, 0, AJY4E002/AJY4E001),
+         trt_shr_pov = ifelse(AJY4E001 == 0, 0, (AJY4E002+AJY4E003)/AJY4E001),
+         trt_shr_2xfpl = ifelse(AJY4E001 == 0, 0, AJY4E008/AJY4E001),
+         trt_med_hh_inc = AJZAE001,
+         trt_shr_hh_pubasst = AJZUE002/AJZUE001,
+         trt_per_cap_inc = AJ0EE001,
+         trt_lfp_rate = AJ1CE002/AJ1CE001,
+         trt_emp_rate = AJ1CE004/AJ1CE001,
+         trt_shr_comp_math = ((AJ1FE007+AJ1FE044)/AJ1FE001),
+         trt_shr_vac_hu = AJ1TE003/AJ1TE001,
+         trt_shr_vac_hu_for_rent = AJ14E002/AJ14E001,
+         trt_shr_rent_occ = AJ1UE003/AJ1UE001,
+         trt_shr_sfh = AJ2JE002/AJ2JE001,
+         trt_shr_20plus = (AJ2JE008+AJ2JE009)/AJ2JE001,
+         trt_shr_blt_post_2000 = AJ2ME004/AJ2ME001,
+         trt_med_gross_rent = AJ3EE001,
+         trt_med_cont_rent = AJ28E001,
+         trt_med_gross_rent_as_shr_inc = AJ3LE001,
+         trt_med_own_hu_val = AJ3QE001) %>% 
   rename_all(.funs = tolower) %>%
   select(trt_id, state, statea, county, countya, tracta, starts_with("trt"))
 
 
-#### C. Query Neighborhood Estimates of CL Listing Activity --------------------
+#### C. Query Neighborhood Estimates of Listing Activity ----------------------
 
 #query for tract aggregates of distinct Craigslist listings
 cl_query <- "SELECT f.trt_id, f.met_id, COUNT(*) AS cl_listing_count, QUANTILE(f.clean_rent, .5) AS cl_median,
@@ -131,7 +136,7 @@ cl_query <- "SELECT f.trt_id, f.met_id, COUNT(*) AS cl_listing_count, QUANTILE(f
                          ) c
                          LEFT JOIN clean d ON ST_Contains(c.geometry, d.geometry) 
                          WHERE d.listing_date BETWEEN '2019-01-01' AND ?end AND
-                               d.match_type NOT IN ('No Address Found', 'Google Maps Lat/Long')
+                               d.match_type NOT IN ('No Address Found')
                          ORDER BY d.listing_date DESC
                         ) e
                   ) f
@@ -153,7 +158,7 @@ apts_query <- "SELECT f.trt_id, f.met_id, COUNT(*) AS apts_listing_count, QUANTI
                                   ROUND(CAST(ST_Y(ST_TRANSFORM(d.geometry, 4326)) as numeric), 3) as lat
                            FROM (
                                  SELECT a.gisjoin AS trt_id, a.geometry, b.cbsafp AS met_id
-                                 FROM tract10 a
+                                 FROM tract17 a
                                  JOIN county17 b ON a.statefp = b.statefp AND a.countyfp = b.countyfp
                                  WHERE b.cbsafp IS NOT NULL
                            ) c
@@ -210,6 +215,7 @@ tract <- tract %>%
   mutate(met_cl_listing_count = sum(cl_listing_count),
          met_apts_listing_count = sum(apts_listing_count)) %>%
   ungroup() %>%
+  filter(state != "Puerto Rico") %>%
   mutate(any_cl_listings = cl_listing_count > 0,
          any_apts_listings = apts_listing_count > 0)
 

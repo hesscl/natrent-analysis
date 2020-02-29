@@ -10,22 +10,34 @@ library(cowplot)
 setwd("R:/Project/natrent-city-sub")
 
 #load in tract extract geojson
-tract <- st_read("./output/extract/tract_listing_count_thru_2019.geojson")
+tract <- read_sf("./output/extract/tract_listing_count_thru_2019.geojson")
 
 #load in tract panel
-tract_clust <- read_csv("./input/tracts_clust_zscore.csv")
+clust <- read_sf("./input/us-hclust-zscore.shp")
 
 
 #### A. Join up ---------------------------------------------------------------
 
+#turn tract_clust into clust level polygons for each CBSA
+clust <- clust %>%
+  select(clust, geometry) %>%
+  st_transform(crs = 102008)
+  
+#make sure both are projected to same CRS (equal area conic)
+tract_centroid <- tract %>%
+  select(trt_id, geometry) %>%
+  st_transform(crs = 102008) %>%
+  st_centroid()
+
+#point in polygon intersection
+tract_clust <- st_join(tract_centroid, clust)
+
 #mutate a common name key for join, reduce table to necessary columns
 tract_clust <- tract_clust %>%
-  mutate(trt_id = GISJOIN,
-         clust = as.character(clust)) %>%
-  distinct(trt_id, clust)
+  st_drop_geometry()
 
 #join data to sf
-tract <- left_join(tract, tract_clust) %>%
+tract <- inner_join(tract, tract_clust) %>%
   st_as_sf() 
 
 top100 <- tract %>%
@@ -37,22 +49,15 @@ top100 <- tract %>%
 tract <- tract %>%
   filter(met_id %in% top100)
 
-#check coverage, 2.8% of tracts w/o match in tract extract from natrent
-#probably should re-run cluster analysis based on ACS shp + estimates
-tract %>% 
-  filter(trt_id %in% tract_clust$trt_id) %>%
-  pull(trt_id) %>%
-  length(.) / nrow(tract)
-
 #metros where clusters do not cover 100%
-tract %>% 
-  st_drop_geometry() %>% 
-  group_by(met_id, cbsa) %>% 
-  summarize(n_na = sum(is.na(clust)),
-            shr = sum(is.na(clust))/n()) %>% 
-  filter(shr > 0) %>%
-  arrange(desc(shr)) %>%
-  as.data.frame()
+#tract %>% 
+#  st_drop_geometry() %>% 
+#  group_by(met_id, cbsa) %>% 
+#  summarize(n_na = sum(is.na(clust)),
+#            shr = sum(is.na(clust))/n()) %>% 
+#  filter(shr > 0) %>%
+#  arrange(desc(shr)) %>%
+#  as.data.frame()
 
 
 #### B. Construct lambda ------------------------------------------------------
@@ -151,7 +156,7 @@ choro_ratios <- function(metro){
 map(metros, choro_ratios)
 
 #Bivariate choro: save another function, this time for bivariate
-#map of lambda (discrete cats) and racial composition
+#map of lambda (discrete cats) by listing source
 choro_bivar <- function(metro){
  
   #a little bit of data preparation
