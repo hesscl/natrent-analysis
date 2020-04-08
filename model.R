@@ -134,15 +134,6 @@ city_sub_rep <- tract_mdata %>%
   summarize(tot = sum(listing_count)) %>%
   mutate(shr = tot/sum(tot))
 
-clust_rep <- tract_mdata %>%
-  mutate(listing_count = ifelse(platform == "Craigslist",
-                                cl_listing_count, 
-                                apts_listing_count)) %>%
-  st_drop_geometry() %>%
-  group_by(platform, clust) %>%
-  summarize(tot = sum(listing_count)) %>%
-  mutate(shr = tot/sum(tot))
-
 ggplot(city_sub_rep, aes(x = city_sub, y = shr, fill = platform)) +
   geom_bar(stat = "identity", position = "dodge") +
   scale_y_continuous(labels = scales::percent) +
@@ -151,16 +142,6 @@ ggplot(city_sub_rep, aes(x = city_sub, y = shr, fill = platform)) +
   labs(x = "", y = "Share of all listings\n", 
        fill = "Platform") +
   ggsave(filename = "./output/desc/city_sub_rep.pdf",
-         width = 6, height = 4, dpi = 300)
-
-ggplot(clust_rep, aes(x = clust, y = shr, fill = platform)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  scale_y_continuous(labels = scales::percent) +
-  theme_minimal() +
-  theme(legend.position = "bottom") +
-  labs(x = "", y = "Share of all listings\n", 
-       fill = "Platform") +
-  ggsave(filename = "./output/desc/clust_rep.pdf",
          width = 6, height = 4, dpi = 300)
 
 
@@ -367,7 +348,7 @@ stargazer(rep_lm_lambda_cl, rep_lm_lambda_apts,
                                "\\% Speaking English Only", "log(Average HH Size)", "\\% College Graduate",
                                "\\% Non-Latino Black", "\\% Latino", "\\% Non-Latino White", 
                                "Log(Median HH Income) $\\times$ \\% Non-Latino White"),
-          notes.label = "Heteroskedasticity Consistent (HC3) Standard Errors in Parentheses",
+          notes.label = "Robust (HC3) Standard Errors in Parentheses",
           out = "./output/model/replication_models.tex")
 
 
@@ -450,8 +431,8 @@ BIC(gam_lambda_apts_2)
 
 #### Output GAM coefficient table ---------------------------------------------
 
-stargazer::stargazer(gam_lambda_cl_1, gam_lambda_cl_2,
-                     gam_lambda_apts_1, gam_lambda_apts_2,
+stargazer::stargazer(gam_lambda_cl_1, gam_lambda_apts_1,
+                     gam_lambda_cl_2, gam_lambda_apts_2,
                      omit = c("trt_vac_rate", "trt_med_yr_rent_hu_blt"),
                      covariate.labels = c("Total Rental HU", "\\% in Same Home Last Year",
                                           "log(Distance to CBD)", "\\% HU Built Before 1940", "Median N Rooms",
@@ -462,8 +443,8 @@ stargazer::stargazer(gam_lambda_cl_1, gam_lambda_cl_2,
                                           "Log(Median HH Income) $\\times$ \\% Non-Latino White",
                                           "Black-White Segregation $\\times$ \\% Non-Latino Black",
                                           "Latino-White Segregation $\\times$ \\% Latino"),
-                     column.separate = c(2, 2, 2),
-                     column.labels = c("Overall", "City", "Suburb"),
+                     column.separate = c(2, 2),
+                     column.labels = c("Model 1", "Model 2"),
                      add.lines=list(c("BIC", 
                                       round(BIC(gam_lambda_cl_1),1), 
                                       round(BIC(gam_lambda_apts_1),1),
@@ -471,7 +452,7 @@ stargazer::stargazer(gam_lambda_cl_1, gam_lambda_cl_2,
                                       round(BIC(gam_lambda_apts_2),1))),
                      keep.stat = c("n"),
                      style = "demography",
-                     title = "Generalized Additive Models (GAM) of Log(lambda) for Craigslist and Apartments.com",
+                     title = "Generalized Additive Models (GAM) of log(Lambda) for Craigslist and Apartments.com",
                      out = "./output/model/gam.tex")
 
 
@@ -518,9 +499,9 @@ ggplot(gam_plot_vac, aes(x = trt_vac_rate, y = visregFit,
   geom_ribbon(alpha = .5, color = NA) +
   geom_hline(yintercept = 0, linetype = 2) +
   scale_x_continuous(labels = scales::percent) +
-  scale_color_discrete(labels = c("1952 (10th Ptile)", "1974 (50th Ptile)",
+  scale_color_brewer(palette = "Set1", labels = c("1952 (10th Ptile)", "1974 (50th Ptile)",
                                   "1996 (90th Ptile)")) +
-  scale_fill_discrete(labels = c("1952 (10th Ptile)", "1974 (50th Ptile)",
+  scale_fill_brewer(palette = "Set1", labels = c("1952 (10th Ptile)", "1974 (50th Ptile)",
                                   "1996 (90th Ptile)")) +
   theme_minimal() +
   theme(panel.spacing = unit(.25, "in"),
@@ -566,8 +547,8 @@ ggplot(gam_plot_shr_blk, aes(x = trt_shr_blk, y = visregFit,
         plot.margin = unit(c(.25, .25, .25, .25), "in"),
         legend.position = "bottom") +
   scale_x_continuous(labels = scales::percent) +
-  scale_color_discrete(labels = c(".47 (10th Ptile)", ".60 (50th Ptile)", ".75 (90 Ptile)")) +
-  scale_fill_discrete(labels = c(".47 (10th Ptile)", ".60 (50th Ptile)", ".75 (90 Ptile)")) +
+  scale_color_brewer(palette = "Set1", labels = c(".47 (10th Ptile)", ".60 (50th Ptile)", ".75 (90 Ptile)")) +
+  scale_fill_brewer(palette = "Set1", labels = c(".47 (10th Ptile)", ".60 (50th Ptile)", ".75 (90 Ptile)")) +
   labs(x = "\nShare Non-Latino Black", y = "Predicted log(Lambda)\n",
        color = "Black-White Segregation", fill = "Black-White Segregation") +
   ggsave(filename = "./output/model/shr_black_interaction_effect.pdf",
@@ -603,15 +584,15 @@ ggplot(gam_plot_shr_lat, aes(x = trt_shr_lat, y = visregFit,
   geom_ribbon(alpha = .5, color = NA) +
   geom_hline(yintercept = 0, linetype = 2) +
   scale_x_continuous(labels = scales::percent) +
-  scale_color_discrete(labels = c(".38 (10th Ptile)", ".48 (50th Ptile)", ".60 (90 Ptile)")) +
-  scale_fill_discrete(labels = c(".38 (10th Ptile)", ".48 (50th Ptile)", ".60 (90 Ptile)")) +
+  scale_color_brewer(palette = "Set1", labels = c(".38 (10th Ptile)", ".48 (50th Ptile)", ".60 (90 Ptile)")) +
+  scale_fill_brewer(palette = "Set1", labels = c(".38 (10th Ptile)", ".48 (50th Ptile)", ".60 (90 Ptile)")) +
   theme_minimal() +
   theme(panel.spacing = unit(.25, "in"),
         plot.margin = unit(c(.25, .25, .25, .25), "in"),
         legend.position = "bottom") +
   labs(x = "\nShare Latino", y = "Predicted log(Lambda)\n",
        color = "Latino-White Segregation", fill = "Latino-White Segregation") +  
-  ggsave(filename = "./output/model/shr_latino_smoothed_effect.pdf",
+  ggsave(filename = "./output/model/shr_latino_interaction_effect.pdf",
          width = 8, height = 6, dpi = 300)
 
 

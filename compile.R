@@ -124,7 +124,7 @@ cbd <- cbd %>%
   group_by(met_id) %>%
   filter(n() == 1 | 
            PrincipleCity %in% c("Deltona city", "Grand Rapids city", "Greenville city", 
-                                "Gulfport city",  "Indianapolis city", "New York city")) %>%
+                                "Gulfport city",  "Indianapolis city (balance)", "New York city")) %>%
   st_drop_geometry()
 
 #join by met_id to tracts
@@ -348,6 +348,10 @@ tract_mdata <- bind_rows(cl_mdata, apts_mdata) %>%
 
 tract_mdata <- tract_mdata %>%
   filter(trt_tot_rent_hu > 0)
+
+tract <- tract %>%
+  mutate(cl_lambda = ifelse(trt_tot_rent_hu == 0, NA, cl_lambda),
+         apts_lambda = ifelse(trt_tot_rent_hu == 0, NA, apts_lambda))
 
 
 #### Save data to storage -----------------------------------------------------

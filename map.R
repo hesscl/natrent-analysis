@@ -105,6 +105,20 @@ choro_bivar <- function(metro){
     mutate(under_cl = 1 - ifelse(cl_lambda > 1, 1, cl_lambda),
            under_apts = 1 - ifelse(apts_lambda > 1, 1, apts_lambda))
   
+  base_map <- cbsa_tracts %>%
+    select(geometry)
+  
+  city_sub <- cbsa_tracts %>%
+    mutate(city_sub = case_when(prin_city == "Y" ~ "City", 
+                                prin_city != "Y" ~ "Suburb")) %>%
+    select(city_sub, geometry) %>%
+    group_by(city_sub) %>%
+    summarize() %>%
+    filter(city_sub == "City")
+  
+  cbsa_tracts <- cbsa_tracts %>%
+    filter(trt_tot_rent_hu > 0)
+  
   #add the biclass col using fn from biscale lib
   under_tracts <- bi_class(cbsa_tracts, 
                           x = under_apts, y = under_cl,
@@ -120,8 +134,10 @@ choro_bivar <- function(metro){
   
   #make the under map
   under_choro <- ggplot() +
+    geom_sf(data = base_map, fill = "lightgrey", color = NA, show.legend = F) +
     geom_sf(data = under_tracts, aes(fill = bi_class), 
             color = NA, size = 0.1, show.legend = FALSE) +
+    geom_sf(data = city_sub, fill = NA, color = "black", lwd = 1) + 
     bi_scale_fill(pal = "GrPink", dim = 3) +
     labs(title = paste("Underrepresented Neighborhoods in", metro)) +
     bi_theme() +
