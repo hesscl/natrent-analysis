@@ -257,7 +257,7 @@ ggplot(diff_in_means_city_sub,
 ## replication linear model formula
 rep_lm_lambda_form <- log(lambda) ~ 
   trt_tot_rent_hu + trt_vac_rate + trt_shr_same_home +
-  log(dist_to_cbd) + trt_shr_blt_pre_1940 + trt_med_n_rooms +
+  log(dist_to_cbd) + trt_shr_blt_pre_1940 + trt_med_n_rooms + trt_med_gross_rent +
   log(trt_med_hh_inc) + trt_shr_age_20_34 + trt_shr_age_65plus +
   trt_shr_col_stud + trt_shr_eng_only + log(trt_avg_hh_size) +
   trt_shr_col_grad + trt_shr_blk + trt_shr_lat +
@@ -343,11 +343,11 @@ stargazer(rep_lm_lambda_cl, rep_lm_lambda_apts,
           style = "demography",
           title = "Boeing 2020 Environment and Planning: A Replication Models",
           covariate.labels = c("Total Rental HU", "Vacancy Rate", "\\% in Same Home Last Year",
-                               "log(Distance to CBD)", "\\% HU Built Before 1940", "Median N Rooms",
+                               "log(Distance to CBD)", "\\% HU Built Before 1940", "Median N Rooms", "Median Gross Rent",
                                "log(Median HH Income)", "\\% Age 20-34", "\\% Age 65+", "\\% College Student",
                                "\\% Speaking English Only", "log(Average HH Size)", "\\% College Graduate",
                                "\\% Non-Latino Black", "\\% Latino", "\\% Non-Latino White", 
-                               "Log(Median HH Income) $\\times$ \\% Non-Latino White"),
+                               "log(Median HH Income) $\\times$ \\% Non-Latino White"),
           notes.label = "Robust (HC3) Standard Errors in Parentheses",
           out = "./output/model/replication_models.tex")
 
@@ -358,7 +358,7 @@ stargazer(rep_lm_lambda_cl, rep_lm_lambda_apts,
 gam_lambda_form_1 <- log(lambda) ~ 
   trt_tot_rent_hu + te(trt_vac_rate, trt_med_yr_rent_hu_blt) +
   trt_shr_same_home + log(dist_to_cbd) + trt_shr_blt_pre_1940 +
-  trt_med_n_rooms +  log(trt_med_hh_inc) +  trt_shr_age_20_34 + 
+  trt_med_n_rooms + trt_med_gross_rent + log(trt_med_hh_inc) +  trt_shr_age_20_34 + 
   trt_shr_age_65plus + trt_shr_col_stud + trt_shr_eng_only + 
   log(trt_avg_hh_size) + trt_shr_col_grad +
   trt_shr_blk + trt_shr_lat + 
@@ -368,7 +368,7 @@ gam_lambda_form_1 <- log(lambda) ~
 gam_lambda_form_2 <- log(lambda) ~ 
   trt_tot_rent_hu + te(trt_vac_rate, trt_med_yr_rent_hu_blt) +
   trt_shr_same_home + log(dist_to_cbd) + trt_shr_blt_pre_1940 +
-  trt_med_n_rooms + log(trt_med_hh_inc) + trt_shr_age_20_34 + 
+  trt_med_n_rooms + trt_med_gross_rent + log(trt_med_hh_inc) + trt_shr_age_20_34 + 
   trt_shr_age_65plus + trt_shr_col_stud + trt_shr_eng_only + 
   log(trt_avg_hh_size) + trt_shr_col_grad +
   trt_shr_blk + trt_shr_lat + 
@@ -435,12 +435,12 @@ stargazer::stargazer(gam_lambda_cl_1, gam_lambda_apts_1,
                      gam_lambda_cl_2, gam_lambda_apts_2,
                      omit = c("trt_vac_rate", "trt_med_yr_rent_hu_blt"),
                      covariate.labels = c("Total Rental HU", "\\% in Same Home Last Year",
-                                          "log(Distance to CBD)", "\\% HU Built Before 1940", "Median N Rooms",
+                                          "log(Distance to CBD)", "\\% HU Built Before 1940", "Median N Rooms", "Median Gross Rent",
                                           "log(Median HH Income)", "\\% Age 20-34", "\\% Age 65+", "\\% College Student",
                                           "\\% Speaking English Only", "log(Average HH Size)", "\\% College Graduate",
                                           "\\% Non-Latino Black", "\\% Latino", "\\% Non-Latino White", 
                                           "Black-White Segregation", "Latino-White Segregation",
-                                          "Log(Median HH Income) $\\times$ \\% Non-Latino White",
+                                          "log(Median HH Income) $\\times$ \\% Non-Latino White",
                                           "Black-White Segregation $\\times$ \\% Non-Latino Black",
                                           "Latino-White Segregation $\\times$ \\% Latino"),
                      column.separate = c(2, 2),
@@ -499,10 +499,10 @@ ggplot(gam_plot_vac, aes(x = trt_vac_rate, y = visregFit,
   geom_ribbon(alpha = .5, color = NA) +
   geom_hline(yintercept = 0, linetype = 2) +
   scale_x_continuous(labels = scales::percent) +
-  scale_color_brewer(palette = "Set1", labels = c("1952 (10th Ptile)", "1974 (50th Ptile)",
-                                  "1996 (90th Ptile)")) +
-  scale_fill_brewer(palette = "Set1", labels = c("1952 (10th Ptile)", "1974 (50th Ptile)",
-                                  "1996 (90th Ptile)")) +
+  scale_color_brewer(palette = "Set1", 
+                     labels = c("1952 (10th Ptile)", "1974 (50th Ptile)", "1996 (90th Ptile)")) +
+  scale_fill_brewer(palette = "Set1", 
+                    labels = c("1952 (10th Ptile)", "1974 (50th Ptile)", "1996 (90th Ptile)")) +
   theme_minimal() +
   theme(panel.spacing = unit(.25, "in"),
         plot.margin = unit(c(.25, .25, .25, .25), "in"),
@@ -584,8 +584,8 @@ ggplot(gam_plot_shr_lat, aes(x = trt_shr_lat, y = visregFit,
   geom_ribbon(alpha = .5, color = NA) +
   geom_hline(yintercept = 0, linetype = 2) +
   scale_x_continuous(labels = scales::percent) +
-  scale_color_brewer(palette = "Set1", labels = c(".38 (10th Ptile)", ".48 (50th Ptile)", ".60 (90 Ptile)")) +
-  scale_fill_brewer(palette = "Set1", labels = c(".38 (10th Ptile)", ".48 (50th Ptile)", ".60 (90 Ptile)")) +
+  scale_color_brewer(palette = "Set1", labels = c(".38 (10th Ptile)", ".48 (50th Ptile)", ".59 (90 Ptile)")) +
+  scale_fill_brewer(palette = "Set1", labels = c(".38 (10th Ptile)", ".48 (50th Ptile)", ".59 (90 Ptile)")) +
   theme_minimal() +
   theme(panel.spacing = unit(.25, "in"),
         plot.margin = unit(c(.25, .25, .25, .25), "in"),
