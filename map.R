@@ -102,6 +102,7 @@ choro_bivar <- function(metro){
   #a little bit of data preparation
   cbsa_tracts <- tract %>%
     filter(cbsa == metro) %>%
+    st_transform(crs = 3857) %>%
     mutate(under_cl = 1 - ifelse(cl_lambda > 1, 1, cl_lambda),
            under_apts = 1 - ifelse(apts_lambda > 1, 1, apts_lambda))
   
@@ -129,8 +130,7 @@ choro_bivar <- function(metro){
                       dim = 3,
                       ylab = "Craigslist",
                       xlab = "Apts.com",
-                      size = 8) +
-    theme(legend.text = element_text(family = "Helvetica"))
+                      size = 10) 
   
   #make the under map
   under_choro <- ggplot() +
@@ -141,7 +141,7 @@ choro_bivar <- function(metro){
     bi_scale_fill(pal = "GrPink", dim = 3) +
     labs(title = paste("Underrepresented Neighborhoods in", metro)) +
     bi_theme() +
-    theme(plot.title = element_text(size = 14, family = "Helvetica"))
+    theme(plot.title = element_text(size = 14))
   
   #assemble the map and legend
   under_gg <- ggdraw() +
@@ -155,6 +155,8 @@ choro_bivar <- function(metro){
             plot = under_gg,
             base_height = 8, base_asp = 1.25) 
   }
+
+#choro_bivar(metros[85])
 
 #produce the chroropleth for each metropolitan area by mapping
 #all unique metro codes to choro_bivar

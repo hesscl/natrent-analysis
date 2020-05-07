@@ -11,7 +11,7 @@ library(effsize)
 setwd("R:/Project/natrent-city-sub")
 
 #load model data
-load("./output/extract/tract_mdata.RData")
+load("./output/extract/tract_mdata_post_id.RData")
 
 #- bivariate maps
 #- cohen's d analysis overall
@@ -67,7 +67,7 @@ ggplot(tract_mdata, aes(x = lambda, fill = platform, color = platform)) +
   labs(fill = "Platform", color = "Platform", y = "") +
   theme_minimal() +
   theme(legend.position = "bottom") +
-  ggsave(filename = "./output/desc/observed.pdf",
+  ggsave(filename = "./output/post_id/desc/observed.pdf",
          width = 6, height = 4, dpi = 300)
 
 ggplot(tract_mdata, aes(x = lambda, fill = platform, color = platform)) +
@@ -75,7 +75,7 @@ ggplot(tract_mdata, aes(x = lambda, fill = platform, color = platform)) +
   labs(fill = "Platform", color = "Platform", y = "") +
   theme_minimal() +
   theme(legend.position = "bottom") +
-  ggsave(filename = "./output/desc/observed_weighted.pdf",
+  ggsave(filename = "./output/post_id/desc/observed_weighted.pdf",
          width = 6, height = 4, dpi = 300)
 
 ## Distribution of log(lambda)
@@ -87,7 +87,7 @@ ggplot(tract_mdata, aes(x = log(lambda), fill = platform, color = platform)) +
        x = "\nlog(Lambda)", y = "") +
   theme_minimal() +
   theme(legend.position = "bottom") +
-  ggsave(filename = "./output/desc/log(lambda).pdf",
+  ggsave(filename = "./output/post_id/desc/log(lambda).pdf",
          width = 6, height = 4, dpi = 300)
 
 ggplot(tract_mdata, aes(x = log(lambda), fill = platform, color = platform)) +
@@ -97,7 +97,7 @@ ggplot(tract_mdata, aes(x = log(lambda), fill = platform, color = platform)) +
        x = "\nlog(Lambda)", y = "") +
   theme_minimal() +
   theme(legend.position = "bottom") +
-  ggsave(filename = "./output/desc/log(lambda)_weighted.pdf",
+  ggsave(filename = "./output/post_id/desc/log(lambda)_weighted.pdf",
          width = 6, height = 4, dpi = 300)
 
 ## Distribution of log(lambda) by city/suburb
@@ -110,7 +110,7 @@ ggplot(tract_mdata, aes(x = log(lambda), fill = platform, color = platform)) +
        x = "\nlog(Lambda)", y = "") +
   theme_minimal() +
   theme(legend.position = "bottom") +
-  ggsave(filename = "./output/desc/log(lambda)_by_city_sub.pdf",
+  ggsave(filename = "./output/post_id/desc/log(lambda)_by_city_sub.pdf",
          width = 6, height = 4, dpi = 300)
 
 ggplot(tract_mdata, aes(x = log(lambda), fill = platform, color = platform)) +
@@ -122,7 +122,7 @@ ggplot(tract_mdata, aes(x = log(lambda), fill = platform, color = platform)) +
        x = "\nlog(Lambda)", y = "") +
   theme_minimal() +
   theme(legend.position = "bottom") +
-  ggsave(filename = "./output/desc/log(lambda)_weighted_by_city_sub.pdf",
+  ggsave(filename = "./output/post_id/desc/log(lambda)_weighted_by_city_sub.pdf",
          width = 6, height = 4, dpi = 300)
 
 
@@ -144,7 +144,7 @@ ggplot(city_sub_rep, aes(x = platform, y = shr, fill = city_sub)) +
   theme(legend.position = "bottom") +
   labs(x = "", y = "Share of all listings\n", 
        fill = "Location") +
-  ggsave(filename = "./output/desc/city_sub_rep.pdf",
+  ggsave(filename = "./output/post_id/desc/city_sub_rep.pdf",
          width = 6, height = 4, dpi = 300)
 
 
@@ -223,14 +223,14 @@ ggplot(diff_in_means_overall,
   scale_x_continuous(limits = c(-.8, .8), 
                      breaks = c(-.8, -.5, -.2, 0, .2, .5, .8), 
                      minor_breaks = F) +
-  scale_y_discrete(labels = var_labels) +
+  #scale_y_discrete(labels = var_labels) +
   theme_minimal() +
   theme(legend.position = "bottom",
         plot.margin = unit(c(.25, .25, .25, .25), "in"),
         panel.spacing.x = unit(.25, "in")) +
   labs(x = "\nCohen's d estimate", y = "", 
        color = "Platform", shape = "Platform") +
-  ggsave(filename = "./output/desc/overall_diff_in_means.pdf",
+  ggsave(filename = "./output/post_id/desc/overall_diff_in_means.pdf",
          width = 8, height = 6, dpi = 300)
 
 #city/suburb plot
@@ -244,14 +244,14 @@ ggplot(diff_in_means_city_sub,
   scale_x_continuous(limits = c(-.8, .8), 
                      breaks = c(-.8, -.5, -.2, 0, .2, .5, .8),
                      minor_breaks = F) +
-  scale_y_discrete(labels = var_labels) +
+  #scale_y_discrete(labels = var_labels) +
   theme_minimal() +
   theme(legend.position = "bottom",
         plot.margin = unit(c(.25, .25, .25, .25), "in"),
         panel.spacing.x = unit(.25, "in")) +
   labs(x = "\nCohen's d estimate", y = "", 
        color = "Platform", shape = "Platform") +
-  ggsave(filename = "./output/desc/city_sub_diff_in_means.pdf",
+  ggsave(filename = "./output/post_id/desc/city_sub_diff_in_means.pdf",
          width = 8, height = 6, dpi = 300)
 
 
@@ -354,7 +354,7 @@ stargazer(rep_lm_lambda_cl, rep_lm_lambda_apts,
                                "Non-Latino Black", "Latino", "Non-Latino White", 
                                "log(Median HH Income) $\\times$ Non-Latino White"),
           notes.label = "Robust (HC3) Standard Errors in Parentheses",
-          out = "./output/model/replication_models.tex")
+          out = "./output/post_id/model/replication_models.tex")
 
 
 #### GAM of differences in representation -------------------------------------
@@ -380,6 +380,7 @@ gam_lambda_form_2 <- log(lambda) ~
   trt_shr_wht * log(trt_med_hh_inc) +
   I(dis_blk_wht * trt_shr_blk) + 
   I(dis_lat_wht * trt_shr_lat) + met_id
+
 
 #estimate GAMs for each platform
 gam_lambda_cl_1 <- gam(gam_lambda_form_1,
@@ -439,15 +440,15 @@ BIC(gam_lambda_apts_2)
 stargazer::stargazer(gam_lambda_cl_1, gam_lambda_apts_1,
                      gam_lambda_cl_2, gam_lambda_apts_2,
                      omit = c("trt_vac_rate", "trt_med_yr_rent_hu_blt", "met_id"),
-                     covariate.labels = c("Total Rental HU", "\\% in Same Home Last Year",
-                                          "log(Distance to CBD)", "\\% HU Built Before 1940", "Median N Rooms", "Median Gross Rent",
-                                          "log(Median HH Income)", "\\% Age 20-34", "\\% Age 65+", "\\% College Student",
-                                          "\\% Speaking English Only", "log(Average HH Size)", "\\% College Graduate",
-                                          "\\% Non-Latino Black", "\\% Latino", "\\% Non-Latino White", 
-                                          "Black-White Segregation", "Latino-White Segregation",
-                                          "log(Median HH Income) $\\times$ \\% Non-Latino White",
-                                          "Black-White Segregation $\\times$ \\% Non-Latino Black",
-                                          "Latino-White Segregation $\\times$ \\% Latino"),
+                     #covariate.labels = c("Total Rental HU", "\\% in Same Home Last Year",
+                    #                      "log(Distance to CBD)", "\\% HU Built Before 1940", "Median N Rooms", "Median Gross Rent",
+                    #                      "log(Median HH Income)", "\\% Age 20-34", "\\% Age 65+", "\\% College Student",
+                    #                      "\\% Speaking English Only", "log(Average HH Size)", "\\% College Graduate",
+                    #                      "\\% Non-Latino Black", "\\% Latino", "\\% Non-Latino White", 
+                    #                      "Black-White Segregation", "Latino-White Segregation",
+                    #                      "log(Median HH Income) $\\times$ \\% Non-Latino White",
+                    #                      "Black-White Segregation $\\times$ \\% Non-Latino Black",
+                    #                      "Latino-White Segregation $\\times$ \\% Latino"),
                      add.lines = list(c("BIC", 
                                         round(BIC(gam_lambda_cl_1),1), 
                                         round(BIC(gam_lambda_apts_1),1),
@@ -461,7 +462,7 @@ stargazer::stargazer(gam_lambda_cl_1, gam_lambda_apts_1,
                      keep.stat = c("n"),
                      style = "demography",
                      title = "Generalized Additive Models (GAM) of log(Lambda) for Craigslist and Apartments.com",
-                     out = "./output/model/gam.tex")
+                     out = "./output/post_id/model/gam.tex")
 
 
 ## Overall smooth term plots --------------------------------------------------
@@ -515,7 +516,7 @@ ggplot(gam_plot_vac, aes(x = trt_vac_rate*100, y = visregFit,
         plot.margin = unit(c(.25, .25, .25, .25), "in"),
         legend.position = "bottom") +
   labs(x = "\nVacancy Rate", y = "Predicted log(Lambda)\n") +
-  ggsave(filename = "./output/model/vac_rate_smoothed_effect.pdf",
+  ggsave(filename = "./output/post_id/model/vac_rate_smoothed_effect.pdf",
          width = 8, height = 6, dpi = 300)
 
 
@@ -556,7 +557,7 @@ ggplot(gam_plot_shr_blk, aes(x = trt_shr_blk*100, y = visregFit,
   scale_fill_brewer(palette = "Set1", labels = c(".47 (10th Ptile)", ".60 (50th Ptile)", ".75 (90 Ptile)")) +
   labs(x = "\nShare Non-Latino Black", y = "Predicted log(Lambda)\n",
        color = "Black-White Segregation", fill = "Black-White Segregation") +
-  ggsave(filename = "./output/model/shr_black_interaction_effect.pdf",
+  ggsave(filename = "./output/post_id/model/shr_black_interaction_effect.pdf",
          width = 8, height = 6, dpi = 300)
 
 ### Metropolitan segregation and % Latino
@@ -596,7 +597,7 @@ ggplot(gam_plot_shr_lat, aes(x = trt_shr_lat*100, y = visregFit,
         legend.position = "bottom") +
   labs(x = "\nShare Latino", y = "Predicted log(Lambda)\n",
        color = "Latino-White Segregation", fill = "Latino-White Segregation") +  
-  ggsave(filename = "./output/model/shr_latino_interaction_effect.pdf",
+  ggsave(filename = "./output/post_id/model/shr_latino_interaction_effect.pdf",
          width = 8, height = 6, dpi = 300)
 
 

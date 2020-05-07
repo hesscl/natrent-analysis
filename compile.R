@@ -4,22 +4,10 @@ library(tidyverse)
 library(yaml)
 library(DBI)
 library(sf)
+library(doParallel)
 
 #set wd to project base folder
 setwd("R:/Project/natrent-city-sub")
-
-#store credentials at base dir of natrent-city-sub as YAML
-cred <- read_yaml("./natrent0.yaml")
-
-#create a database connection
-natrent <- dbConnect(
-  drv = RPostgres::Postgres(),
-  dbname = "natrent",
-  host = "natrent0.csde.washington.edu",
-  user = names(cred),
-  password = cred[[names(cred)]],
-  bigint = "numeric"
-)
 
 #CBD coordinates
 cbd <- read_csv("./input/CBD_geocodes.csv")
@@ -28,84 +16,66 @@ cbd <- read_csv("./input/CBD_geocodes.csv")
 not_all_na <- function(x) any(!is.na(x))
 
 
-#### Query Neighborhood Estimates of Listing Activity -------------------------
+#### Collect data from natrent database ---------------------------------------
 
-#query for tract aggregates of distinct Craigslist listings
-cl_query <- "SELECT f.trt_id, f.met_id, COUNT(*) AS cl_listing_count 
-             FROM (
-                   SELECT DISTINCT e.trt_id, e.met_id, e.clean_beds, e.clean_sqft, e.lng, e.lat
-                   FROM (
-                         SELECT c.trt_id, c.met_id, d.listing_date, d.clean_beds, d.clean_sqft, d.clean_rent,
-                                ROUND(CAST(ST_X(ST_TRANSFORM(d.geometry, 4326)) as numeric), 3) as lng, 
-                                ROUND(CAST(ST_Y(ST_TRANSFORM(d.geometry, 4326)) as numeric), 3) as lat
-                         FROM (
-                               SELECT a.gisjoin AS trt_id, a.geometry, b.cbsafp AS met_id
-                               FROM tract17 a
-                               JOIN county17 b ON a.statefp = b.statefp AND a.countyfp = b.countyfp
-                               WHERE b.cbsafp IS NOT NULL
-                         ) c
-                         LEFT JOIN clean d ON ST_Contains(c.geometry, d.geometry) 
-                         WHERE d.listing_date BETWEEN '2019-01-01' AND ?end AND
-                               d.match_type NOT IN ('No Address Found', 'Google Maps Lat/Long') AND
-                               d.clean_beds IS NOT NULL AND
-                               d.clean_sqft IS NOT NULL
-                         ORDER BY d.listing_date DESC
-                        ) e
-                  ) f
-            GROUP BY f.trt_id, f.met_id
-            ORDER BY f.met_id"
+#assemble the Craigslist SQL queries into a list, name elements based on data definition
+cl_counts <- list("Beds X Sqft X Loc" = read_file("./sql/cl_beds_sqft_loc_tract.sql"), 
+                  "Beds X Sqft X Rent X Loc" = read_file("./sql/cl_beds_sqft_rent_loc_tract.sql"), 
+                  "Post ID" = read_file("./sql/cl_post_id_tract.sql"), 
+                  "No Dedupe" = read_file("./sql/cl_no_dedupe_tract.sql"), 
+                  "No Filter, No Dedupe" = read_file("./sql/cl_no_filter_no_dedupe_tract.sql"))
 
-#query for tract aggregates of distinct Apts.com listings
-apts_query <- "SELECT f.trt_id, f.met_id, COUNT(*) AS apts_listing_count
-               FROM (
-                     SELECT DISTINCT e.trt_id, e.met_id, e.clean_beds, e.clean_sqft, e.lng, e.lat
-                     FROM (
-                           SELECT c.trt_id, c.met_id, d.scraped_time, d.clean_beds, d.clean_sqft, d.clean_rent,
-                                  ROUND(CAST(ST_X(ST_TRANSFORM(d.geometry, 4326)) as numeric), 3) as lng, 
-                                  ROUND(CAST(ST_Y(ST_TRANSFORM(d.geometry, 4326)) as numeric), 3) as lat
-                           FROM (
-                                 SELECT a.gisjoin AS trt_id, a.geometry, b.cbsafp AS met_id
-                                 FROM tract17 a
-                                 JOIN county17 b ON a.statefp = b.statefp AND a.countyfp = b.countyfp
-                                 WHERE b.cbsafp IS NOT NULL
-                           ) c
-                           LEFT JOIN apts_clean d ON ST_Contains(c.geometry, d.geometry) 
-                           WHERE d.scraped_time BETWEEN '2019-01-01' AND ?end AND
-                               d.clean_beds IS NOT NULL AND
-                               d.clean_sqft IS NOT NULL
-                           ORDER BY d.scraped_time DESC
-                          ) e
-                    ) f
-              GROUP BY f.trt_id, f.met_id
-              ORDER BY f.met_id"
+#assemble the Apartments.com SQL queries into a list, name elements based on data definition
+apts_counts <- list("Beds X Sqft X Loc" = read_file("./sql/apts_beds_sqft_loc_tract.sql"), 
+                    "Beds X Sqft X Rent X Loc" = read_file("./sql/apts_beds_sqft_rent_loc_tract.sql"), 
+                    "No Dedupe" = read_file("./sql/apts_no_dedupe_tract.sql"), 
+                    "No Filter, No Dedupe" = read_file("./sql/apts_no_filter_no_dedupe_tract.sql"))
 
 #query for all the tracts in CBSAs even where the cl counts are 0
-tract_query <- "SELECT c.gisjoin AS trt_id, c.geometry, c.cbsafp AS met_id, c.intptlon, c.intptlat, c.aland,
-                       d.name AS place_name, d.namelsad AS place_namelsad, d.pcicbsa AS prin_city
-               FROM (SELECT a.gisjoin, a.geometry, b.cbsafp, a.intptlon, a.intptlat, a.aland
-                     FROM tract17 a
-                     JOIN county17 b ON a.statefp = b.statefp AND a.countyfp = b.countyfp
-                     WHERE b.cbsafp IS NOT NULL) c
-               LEFT JOIN place17 d ON st_within(st_centroid(c.geometry), d.geometry)"
+tract <- read_file("./sql/full_tract_query.sql")
 
 #query for all metro CBSAs 
-cbsa_query <- "SELECT * FROM cbsa17 WHERE memi = '1'"
+cbsa <- "SELECT * FROM cbsa17 WHERE memi = '1'"
 
-#set temporal cutoff and work this into queries
-cutoff_date <- "2019-08-31"
-cl_query <- sqlInterpolate(natrent, cl_query, end = cutoff_date)
-apts_query <- sqlInterpolate(natrent, apts_query, end = cutoff_date)
+#function to submit the queries
+natrent_query <- function(query, cred = yaml::read_yaml("./natrent0.yaml"), cutoff_date = NULL){
+  
+  #create a database connection
+  conn <- DBI::dbConnect(
+    drv = RPostgres::Postgres(),
+    dbname = "natrent",
+    host = "natrent0.csde.washington.edu",
+    user = names(cred),
+    password = cred[[names(cred)]],
+    bigint = "numeric"
+  )
 
-#submit the queries
-cl_counts <- dbGetQuery(natrent, cl_query)
-apts_counts <- dbGetQuery(natrent, apts_query)
+  #interpolate cutoff value
+  if(!is.null(cutoff_date)) {
+    query <- DBI::sqlInterpolate(conn, query, end = cutoff_date)
+  }
+  
+  #submit statement to database
+  sf::st_read(conn, query = query)
+  
+  #close connection
+  DBI::dbDisconnect(conn)
+}
 
-#join up the results
-tract_counts <- full_join(cl_counts, apts_counts)
+#register parallel backend to use 2 cores (half of natrent0's CPUs)
+cl <- makeCluster(2)
+registerDoParallel(cl)
+
+#submit each query for each platform running two queries in parallel
+cl_counts <- foreach(i = names(cl_counts)) %dopar% 
+  natrent_query(cl_counts[[i]], cutoff_date = "2019-08-31")
+
+apts_counts <- foreach(i = names(apts_counts)) %dopar% 
+  natrent_query(apts_counts[[i]], cutoff_date = "2019-08-31")
 
 #submit queries for boundary shapefiles
-tract <- st_read(natrent, query = tract_query)
-cbsa <- st_read(natrent, query = cbsa_query)
+tract <- natrent_query(tract)
+cbsa <- natrent_query(cbsa)
 
 
 #### Prepare distance measure for each tract ----------------------------------
@@ -133,18 +103,6 @@ tract <- tract %>%
   mutate(intptlon = type.convert(intptlon),
          intptlat = type.convert(intptlat),
          dist_to_cbd = sqrt((intptlon-CBDlon)^2+(intptlat-CBDlat)^2))
-
-
-#### Join up queried data -----------------------------------------------------
-
-#then we want to filter to only the met areas where we're collecting listings
-tract <- tract %>% 
-  filter(met_id %in% unique(tract_counts$met_id)) %>% 
-  #join it to the ones where we have counts
-  left_join(tract_counts) %>% 
-  #then fill the NAs with zeros because we have no listings there
-  mutate(cl_listing_count = if_else(is.na(cl_listing_count), 0, cl_listing_count),
-         apts_listing_count = if_else(is.na(apts_listing_count), 0, apts_listing_count))
 
 
 #### Load in Metropolitan ACS Data, Mutate Columns ----------------------------
@@ -280,7 +238,16 @@ acs_tract <- read_csv("./input/nhgis0148_csv/nhgis0148_ds239_20185_2018_tract.cs
   select(trt_id, state, statea, county, countya, tracta, starts_with("trt"))
 
 
-#### Join Tables --------------------------------------------------------------
+#### Join up data -----------------------------------------------------
+
+#then we want to filter to only the met areas where we're collecting listings
+tract <- tract %>% 
+  filter(met_id %in% unique(tract_counts$met_id)) %>% 
+  #join it to the ones where we have counts
+  left_join(tract_counts) %>% 
+  #then fill the NAs with zeros because we have no listings there
+  mutate(cl_listing_count = if_else(is.na(cl_listing_count), 0, cl_listing_count),
+         apts_listing_count = if_else(is.na(apts_listing_count), 0, apts_listing_count))
 
 tract <- inner_join(tract, acs_tract)
 

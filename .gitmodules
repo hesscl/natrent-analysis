@@ -1,0 +1,3 @@
+[submodule "sql"]
+	path = sql
+	url = https://github.com/hesscl/natrent-sql.git
