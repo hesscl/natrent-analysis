@@ -16,20 +16,31 @@ cbd <- read_csv("./input/CBD_geocodes.csv")
 not_all_na <- function(x) any(!is.na(x))
 
 
-#### Collect data from natrent database ---------------------------------------
+#### Collect study data from natrent database ---------------------------------
 
 #assemble the Craigslist SQL queries into a list, name elements based on data definition
-cl_counts <- list("Beds X Sqft X Loc" = read_file("./sql/cl_beds_sqft_loc_tract.sql"), 
-                  "Beds X Sqft X Rent X Loc" = read_file("./sql/cl_beds_sqft_rent_loc_tract.sql"), 
-                  "Post ID" = read_file("./sql/cl_post_id_tract.sql"), 
-                  "No Dedupe" = read_file("./sql/cl_no_dedupe_tract.sql"), 
-                  "No Filter, No Dedupe" = read_file("./sql/cl_no_filter_no_dedupe_tract.sql"))
+cl_counts <- list(read_file("./sql/cl_beds_sqft_loc_tract.sql"), 
+                  read_file("./sql/cl_beds_sqft_rent_loc_tract.sql"), 
+                  read_file("./sql/cl_post_id_tract.sql"), 
+                  read_file("./sql/cl_no_dedupe_tract.sql"), 
+                  read_file("./sql/cl_no_filter_no_dedupe_tract.sql"))
+
+cl_sum <- list(read_file("./sql/cl_beds_sqft_loc.sql"), 
+               read_file("./sql/cl_beds_sqft_rent_loc.sql"), 
+               read_file("./sql/cl_post_id.sql"), 
+               read_file("./sql/cl_no_dedupe.sql"), 
+               read_file("./sql/cl_no_filter_no_dedupe.sql"))
 
 #assemble the Apartments.com SQL queries into a list, name elements based on data definition
-apts_counts <- list("Beds X Sqft X Loc" = read_file("./sql/apts_beds_sqft_loc_tract.sql"), 
-                    "Beds X Sqft X Rent X Loc" = read_file("./sql/apts_beds_sqft_rent_loc_tract.sql"), 
-                    "No Dedupe" = read_file("./sql/apts_no_dedupe_tract.sql"), 
-                    "No Filter, No Dedupe" = read_file("./sql/apts_no_filter_no_dedupe_tract.sql"))
+apts_counts <- list(read_file("./sql/apts_beds_sqft_loc_tract.sql"), 
+                    read_file("./sql/apts_beds_sqft_rent_loc_tract.sql"), 
+                    read_file("./sql/apts_no_dedupe_tract.sql"), 
+                    read_file("./sql/apts_no_filter_no_dedupe_tract.sql"))
+
+apts_sum <- list(read_file("./sql/apts_beds_sqft_loc.sql"), 
+                 read_file("./sql/apts_beds_sqft_rent_loc.sql"), 
+                 read_file("./sql/apts_no_dedupe.sql"), 
+                 read_file("./sql/apts_no_filter_no_dedupe.sql"))
 
 #query for all the tracts in CBSAs even where the cl counts are 0
 tract <- read_file("./sql/full_tract_query.sql")
@@ -56,10 +67,13 @@ natrent_query <- function(query, cred = yaml::read_yaml("./natrent0.yaml"), cuto
   }
   
   #submit statement to database
-  sf::st_read(conn, query = query)
+  result <- sf::st_read(conn, query = query)
   
   #close connection
   DBI::dbDisconnect(conn)
+  
+  #return result
+  result
 }
 
 #register parallel backend to use 2 cores (half of natrent0's CPUs)
@@ -67,11 +81,21 @@ cl <- makeCluster(2)
 registerDoParallel(cl)
 
 #submit each query for each platform running two queries in parallel
-cl_counts <- foreach(i = names(cl_counts)) %dopar% 
-  natrent_query(cl_counts[[i]], cutoff_date = "2019-08-31")
+cl_counts <- foreach(i = 1:length(cl_counts)) %dopar% 
+  natrent_query(cl_counts[[i]], cutoff_date = "2019-08-31") 
+names(cl_counts) <- c("Beds X Sqft X Loc", "Bed X Sqft X Rent X Loc", "Post ID", "No Dedupe", "No Filter, No Dedupe")
 
-apts_counts <- foreach(i = names(apts_counts)) %dopar% 
+cl_sum <- foreach(i = 1:length(cl_sum)) %dopar% 
+  natrent_query(cl_sum[[i]], cutoff_date = "2019-08-31") 
+names(cl_sum) <- c("Beds X Sqft X Loc", "Bed X Sqft X Rent X Loc", "Post ID", "No Dedupe", "No Filter, No Dedupe")
+
+apts_counts <- foreach(i = 1:length(apts_counts)) %dopar% 
   natrent_query(apts_counts[[i]], cutoff_date = "2019-08-31")
+names(apts_counts) <- c("Beds X Sqft X Loc", "Bed X Sqft X Rent X Loc", "No Dedupe", "No Filter, No Dedupe")
+
+apts_sum <- foreach(i = 1:length(apts_sum)) %dopar% 
+  natrent_query(apts_sum[[i]], cutoff_date = "2019-08-31")
+names(apts_sum) <- c("Beds X Sqft X Loc", "Bed X Sqft X Rent X Loc", "No Dedupe", "No Filter, No Dedupe")
 
 #submit queries for boundary shapefiles
 tract <- natrent_query(tract)
@@ -240,46 +264,73 @@ acs_tract <- read_csv("./input/nhgis0148_csv/nhgis0148_ds239_20185_2018_tract.cs
 
 #### Join up data -----------------------------------------------------
 
-#then we want to filter to only the met areas where we're collecting listings
-tract <- tract %>% 
-  filter(met_id %in% unique(tract_counts$met_id)) %>% 
-  #join it to the ones where we have counts
-  left_join(tract_counts) %>% 
-  #then fill the NAs with zeros because we have no listings there
-  mutate(cl_listing_count = if_else(is.na(cl_listing_count), 0, cl_listing_count),
-         apts_listing_count = if_else(is.na(apts_listing_count), 0, apts_listing_count))
+#make a list element for Apartments.com that will return only the CL columns
+#once joined to the CL table (i.e. just include tract and metro keys)
+apts_counts$`Post ID` <- data.frame(met_id = apts_counts[[1]]$trt_id,
+                                    trt_id = apts_counts[[1]]$met_id)
 
-tract <- inner_join(tract, acs_tract)
+#sort the lists so elements are the same order in each list
+apts_counts <- apts_counts[sort.list(names(apts_counts))]
+cl_counts <- cl_counts[sort.list(names(cl_counts))]
 
-tract <- left_join(tract, acs_cbsa)
+#join each cl_count element to each apts_count element, keep all tracts
+counts <- mapply(full_join, cl_counts, apts_counts, simplify = FALSE)
 
+#join ACS tract IDs and CBD distance measure to each list element of count
+tract <- lapply(counts, function(x){left_join(tract, x)})
+
+#then we want to filter to only the met areas where we're collecting listings,
+#and join the ACS data to the tract summaries
+tract <- lapply(tract,  
+             function(tbl){
+               tbl <- tbl %>% 
+                 filter(met_id %in% unique(cbsa$cbsafp)) %>% 
+                 
+                 #then fill the NAs with zeros because we have no listings there
+                 mutate_at(vars(starts_with("cl_listing_count"), starts_with("apts_listing_count")),
+                           function(x){if_else(is.na(x), 0, x)}) %>%
+                 
+                 #then join the acs data
+                 inner_join(acs_tract) %>%
+                 left_join(acs_cbsa) %>%
+                 
+                 #then compute metro summaries
+                 group_by(met_id) %>%
+                 mutate_at(vars(starts_with("cl_listing_count"), starts_with("apts_listing_count")),
+                           .funs = list(met = ~sum(.))) %>%
+                 rename_at(vars(ends_with("met")),
+                           .funs = list( ~paste("met", gsub("_met", "", .), sep = "_"))) %>%
+                 ungroup() %>%
+                 
+                 #then filter PR 
+                 filter(state != "Puerto Rico") %>%
+                 
+                 #compute dummies for any listings in tract
+                 mutate_at(vars(starts_with("cl_listing_count"), starts_with("apts_listing_count")),
+                           .funs = list(any = ~ . > 0)) %>%
+                 rename_at(vars(ends_with("any")),
+                           .funs = list( ~paste("any", gsub("_any", "", .), sep = "_")))
+               })
+
+#now merge the tract data list into a single object where def indexes data defs
+tract <- bind_rows(tract, .id = "def")
+
+#compute lambda and its relevant quantities like phi for each metro X def combo
 tract <- tract %>%
-  group_by(met_id) %>%
-  mutate(met_cl_listing_count = sum(cl_listing_count),
-         met_apts_listing_count = sum(apts_listing_count)) %>%
-  ungroup() %>%
-  filter(state != "Puerto Rico") %>%
-  mutate(any_cl_listings = cl_listing_count > 0,
-         any_apts_listings = apts_listing_count > 0)
-
-#make variables for boeing replication
-tract <- tract %>% 
-  group_by(met_id) %>% 
-  mutate(met_tot_cl_listings = sum(cl_listing_count),
-         met_tot_apts_listings = sum(apts_listing_count),
-         phi_tract_cl = (met_tot_cl_listings)*((trt_tot_vac_hu_for_rent)/sum(trt_tot_vac_hu_for_rent)),
-         phi_tract_apts = (met_tot_apts_listings)*((trt_tot_vac_hu_for_rent)/sum(trt_tot_vac_hu_for_rent)),
+group_by(met_id, def) %>% 
+  mutate(phi_tract_cl = (met_cl_listing_count)*((trt_tot_vac_hu_for_rent)/sum(trt_tot_vac_hu_for_rent)),
+         phi_tract_apts = (met_apts_listing_count)*((trt_tot_vac_hu_for_rent)/sum(trt_tot_vac_hu_for_rent)),
          count_tracts = n()) %>% 
   ungroup() %>% 
   mutate(cl_lambda = (cl_listing_count+1)/(phi_tract_cl+1),
          apts_lambda = (apts_listing_count+1)/(phi_tract_apts+1)) 
 
-
 #### Filter to top 100, add boeing sample filter ------------------------------
+
 
 top_100 <- tract %>%
   st_drop_geometry() %>%
-  filter(met_tot_cl_listings > 0) %>%
+  filter(def == "Beds X Sqft X Loc", met_cl_listing_count > 0) %>%
   distinct(met_id, met_tot_pop) %>%
   top_n(100, met_tot_pop) %>%
   arrange(desc(met_tot_pop)) %>%
@@ -303,7 +354,7 @@ apts_mdata <- tract %>%
   rename(lambda = apts_lambda)
 
 tract_mdata <- bind_rows(cl_mdata, apts_mdata) %>%
-  group_by(met_id, platform) %>%
+  group_by(met_id, platform, def) %>%
   mutate(dis_blk_wht = (.5) * sum(abs(trt_tot_blk/sum(trt_tot_blk) - 
                                         trt_tot_wht/sum(trt_tot_wht))),
          dis_lat_wht = (.5) * sum(abs(trt_tot_lat/sum(trt_tot_lat) - 
@@ -323,14 +374,10 @@ tract <- tract %>%
 
 #### Save data to storage -----------------------------------------------------
 
-st_write(st_transform(tract, 4326), "./output/extract/tract_listing_count_thru_aug_2019.geojson", 
-         delete_dsn = T)
-
-flat_file <- st_drop_geometry(tract)
-
-write_csv(flat_file, "./output/extract/tract_listing_count_thru_aug_2019.csv")
-
 #save data for models
-save(tract_mdata, file = "./output/extract/tract_mdata.RData")
+save(tract, tract_mdata, 
+     file = "./output/extract/tract.RData")
 
+save(cl_sum, apts_sum, 
+     file = "./output/extract/sum.RData")
 
