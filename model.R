@@ -1,9 +1,10 @@
-
+#dependencies
 library(tidyverse)
 library(sf)
 library(mgcv)
 library(sandwich)
 library(visreg)
+library(xtable)
 library(stargazer)
 library(effsize)
 
@@ -11,8 +12,22 @@ library(effsize)
 setwd("R:/Project/natrent-city-sub")
 
 #load model data
-load("./output/extract/tract_mdata.RData")
+load("./output/extract/tract.RData")
 
+#load the summary data
+load("./output/extract/sum.RData")
+
+#set CRS for tract and tract_mdata
+tract <- st_set_crs(tract, 102008)
+tract_mdata <- st_set_crs(tract_mdata, 102008)
+
+#number of unique tracts
+length(unique(tract_mdata$trt_id))
+
+
+#### Results outline ----------------------------------------------------------
+
+#- dedupe/filtering descriptions
 #- bivariate maps
 #- cohen's d analysis overall
 #- cohen's d analysis city/suburb
@@ -23,11 +38,61 @@ load("./output/extract/tract_mdata.RData")
 #- gam smooth term for poverty/shrblack
 
 
-sum(tract_mdata$cl_listing_count[tract_mdata$platform=="Craigslist"])
-sum(tract_mdata$apts_listing_count[tract_mdata$platform=="Apartments.com"])
-length(unique(tract_mdata$trt_id))
+#### First create a table of summary statistics about sample between different data defs -----
 
-#### Mutate a few columns prior to analysis
+## Craigslist
+
+#restructure to data.frame, order by def
+cl_sum <- bind_rows(cl_sum, .id = "def") 
+cl_sum$def <- factor(cl_sum$def)
+cl_sum$def <- factor(cl_sum$def, levels = levels(cl_sum$def)[c(5,4,3,2,1)])
+cl_sum <- arrange(cl_sum, def)
+
+#make a summary table with labels
+cl_sum_tbl <- rbind(c("Listing Count", cl_sum$cl_listing_count), 
+                    c("Average Rent", round(cl_sum$cl_avg_rent)),
+                    c("Median Rent", cl_sum$cl_med_rent), 
+                    c("Average 2B Rent", round(cl_sum$cl_avg_rent_2b)),
+                    c("Median 2B Rent", cl_sum$cl_med_rent_2b),
+                    c("Average Sqft", round(cl_sum$cl_avg_sqft)),
+                    c("Median Sqft", cl_sum$cl_med_sqft),
+                    c("Average Bedrooms", round(cl_sum$cl_avg_beds, 2)),
+                    c("Median Bedrooms", cl_sum$cl_med_beds))
+colnames(cl_sum_tbl) <- c("Statistic", as.character(cl_sum$def))
+
+#convert to Latex and print to console
+cl_sum_tbl <- xtable(cl_sum_tbl, 
+                     caption = "Descriptive statistics for Craigslist data definitions")
+print(cl_sum_tbl, include.rownames = FALSE, booktabs = TRUE,
+      file = "./output/desc/cl_data_definitions.tex")
+
+## Apartments.com
+
+#restructure to data.frame, order by def
+apts_sum <- bind_rows(apts_sum, .id = "def") 
+apts_sum$def <- factor(apts_sum$def)
+apts_sum <- arrange(apts_sum, desc(def))
+
+#make a summary table with labels
+apts_sum_tbl <- rbind(c("Listing Count", apts_sum$apts_listing_count), 
+                    c("Average Rent", round(apts_sum$apts_avg_rent)),
+                    c("Median Rent", apts_sum$apts_med_rent), 
+                    c("Average 2B Rent", round(apts_sum$apts_avg_rent_2b)),
+                    c("Median 2B Rent", apts_sum$apts_med_rent_2b),
+                    c("Average Sqft", round(apts_sum$apts_avg_sqft)),
+                    c("Median Sqft", apts_sum$apts_med_sqft),
+                    c("Average Bedrooms", round(apts_sum$apts_avg_beds, 2)),
+                    c("Median Bedrooms", apts_sum$apts_med_beds))
+colnames(apts_sum_tbl) <- c("Statistic", as.character(apts_sum$def))
+
+#convert to Latex and print to console
+apts_sum_tbl <- xtable(apts_sum_tbl, 
+                       caption = "Descriptive statistics for Apartments.com data definitions")
+print(apts_sum_tbl, include.rownames = FALSE, booktabs = TRUE,
+      file = "./output/desc/apts_data_definitions.tex")
+
+
+#### Next, mutate a few columns prior to main analysis ------------------------
 
 tract_mdata <- tract_mdata %>%
   mutate(trt_pop_dens = (trt_tot_pop/1000)/(aland/1000),
@@ -44,7 +109,7 @@ tract_mdata <- tract_mdata %>%
                                          NA, trt_med_yr_rent_hu_blt))
 
 
-#### Listwise delete
+#### Listwise delete ----------------------------------------------------------
 
 vars_set <- c("trt_shr_col_grad", "trt_med_hh_inc", "trt_shr_wht",
               "trt_med_gross_rent", "trt_shr_col_stud", "trt_med_own_hu_val",
@@ -56,8 +121,42 @@ vars_set <- c("trt_shr_col_grad", "trt_med_hh_inc", "trt_shr_wht",
               "dist_to_cbd")
 
 tract_mdata <- tract_mdata %>%
-  filter_at(vars(all_of(vars_set)), all_vars(!is.na(.))) 
+  filter_at(vars(all_of(vars_set)), all_vars(!is.na(.))) %>%
+  filter(trt_tot_rent_hu > 0)
 
+
+#### Summarize spatial compression and other distribution metrics -------------
+
+zero_vac <- tract %>%
+  st_drop_geometry %>%
+  group_by(def) %>%
+  summarize(n_cl_listings = sum(cl_listing_count),
+            n_apts_listings = sum(apts_listing_count),
+            cl_gini = round(DescTools::Gini(cl_listing_count), 2),
+            apts_gini = round(DescTools::Gini(apts_listing_count), 2),
+            n_cl_zero_vac = sum(cl_listing_count[trt_tot_vac_hu_for_rent==0]),
+            n_apts_zero_vac = sum(apts_listing_count[trt_tot_vac_hu_for_rent==0]),
+            platform_dis = round((.5) * sum(abs(cl_listing_count/sum(cl_listing_count) - 
+                                   apts_listing_count/sum(apts_listing_count))), 2),
+            platform_dis = round((.5) * sum(abs(cl_listing_count/sum(cl_listing_count) - 
+                                            trt_tot_vac_hu_for_rent/sum(trt_tot_vac_hu_for_rent))), 2)) %>%
+  mutate(pct_cl_zero_vac = round(n_cl_zero_vac/n_cl_listings, 2),
+         pct_apts_zero_vac = round(n_apts_zero_vac/n_apts_listings, 2)) %>%
+  select(-starts_with("n"))
+zero_vac$def <- factor(zero_vac$def)
+zero_vac$def <- factor(zero_vac$def, levels = levels(zero_vac$def)[c(4, 3, 5, 2, 1)])
+zero_vac <- arrange(zero_vac, def) %>% t()
+colnames(zero_vac) <- zero_vac[1,]
+zero_vac <- zero_vac[-1,]
+rownames(zero_vac) <- c("Craigslist Gini", "Apartments.com Gini",
+                        "Platform Dissimilarity", "Prop. Craigslist in Zero Vacant For Rent Tract",
+                        "Prop. Apartments.com in Zero Vacant For Rent Tract")
+zero_vac <- xtable(zero_vac, caption = "Distribution summary statistics by data definition")
+print(zero_vac, booktabs = TRUE, file = "./output/desc/distribution.tex")
+
+#### Select preferred data definition for remaining analysis -----------------
+
+tract_mdata <- tract_mdata %>% filter(def == "Beds X Sqft X Loc")
 
 #### Plot the distribution of lambda (as observed and transformed) ------------
 

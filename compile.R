@@ -83,19 +83,19 @@ registerDoParallel(cl)
 #submit each query for each platform running two queries in parallel
 cl_counts <- foreach(i = 1:length(cl_counts)) %dopar% 
   natrent_query(cl_counts[[i]], cutoff_date = "2019-08-31") 
-names(cl_counts) <- c("Beds X Sqft X Loc", "Bed X Sqft X Rent X Loc", "Post ID", "No Dedupe", "No Filter, No Dedupe")
+names(cl_counts) <- c("Beds X Sqft X Loc", "Beds X Sqft X Rent X Loc", "Post ID", "No Dedupe", "No Filter, No Dedupe")
 
 cl_sum <- foreach(i = 1:length(cl_sum)) %dopar% 
-  natrent_query(cl_sum[[i]], cutoff_date = "2019-08-31") 
-names(cl_sum) <- c("Beds X Sqft X Loc", "Bed X Sqft X Rent X Loc", "Post ID", "No Dedupe", "No Filter, No Dedupe")
+  natrent_query(cl_sum[[i]], cutoff_date = "2019-08-31")
+names(cl_sum) <- c("Beds X Sqft X Loc", "Beds X Sqft X Rent X Loc", "Post ID", "No Dedupe", "No Filter, No Dedupe")
 
 apts_counts <- foreach(i = 1:length(apts_counts)) %dopar% 
   natrent_query(apts_counts[[i]], cutoff_date = "2019-08-31")
-names(apts_counts) <- c("Beds X Sqft X Loc", "Bed X Sqft X Rent X Loc", "No Dedupe", "No Filter, No Dedupe")
+names(apts_counts) <- c("Beds X Sqft X Loc", "Beds X Sqft X Rent X Loc", "No Dedupe", "No Filter, No Dedupe")
 
 apts_sum <- foreach(i = 1:length(apts_sum)) %dopar% 
   natrent_query(apts_sum[[i]], cutoff_date = "2019-08-31")
-names(apts_sum) <- c("Beds X Sqft X Loc", "Bed X Sqft X Rent X Loc", "No Dedupe", "No Filter, No Dedupe")
+names(apts_sum) <- c("Beds X Sqft X Loc", "Beds X Sqft X Rent X Loc", "No Dedupe", "No Filter, No Dedupe")
 
 #submit queries for boundary shapefiles
 tract <- natrent_query(tract)
@@ -364,8 +364,8 @@ tract_mdata <- bind_rows(cl_mdata, apts_mdata) %>%
 
 #### Filter to tracts with rental housing -------------------------------------
 
-tract_mdata <- tract_mdata %>%
-  filter(trt_tot_rent_hu > 0)
+#tract_mdata <- tract_mdata %>%
+#  filter(trt_tot_rent_hu > 0)
 
 tract <- tract %>%
   mutate(cl_lambda = ifelse(trt_tot_rent_hu == 0, NA, cl_lambda),
