@@ -18,8 +18,8 @@ load("./output/extract/tract.RData")
 load("./output/extract/sum.RData")
 
 #set CRS for tract and tract_mdata
-tract <- st_set_crs(tract, 102008)
-tract_mdata <- st_set_crs(tract_mdata, 102008)
+tract <- st_set_crs(tract, "+proj=aea +lat_1=20 +lat_2=60 +lat_0=40 +lon_0=-96 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs")
+tract_mdata <- st_set_crs(tract_mdata, "+proj=aea +lat_1=20 +lat_2=60 +lat_0=40 +lon_0=-96 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs")
 
 #number of unique tracts
 length(unique(tract_mdata$trt_id))
@@ -45,17 +45,17 @@ length(unique(tract_mdata$trt_id))
 #restructure to data.frame, order by def
 cl_sum <- bind_rows(cl_sum, .id = "def") 
 cl_sum$def <- factor(cl_sum$def)
-cl_sum$def <- factor(cl_sum$def, levels = levels(cl_sum$def)[c(5,4,3,2,1)])
+cl_sum$def <- factor(cl_sum$def, levels = levels(cl_sum$def)[c(4,3,5,2,1)])
 cl_sum <- arrange(cl_sum, def)
 
 #make a summary table with labels
-cl_sum_tbl <- rbind(c("Listing Count", cl_sum$cl_listing_count), 
-                    c("Average Rent", round(cl_sum$cl_avg_rent)),
-                    c("Median Rent", cl_sum$cl_med_rent), 
-                    c("Average 2B Rent", round(cl_sum$cl_avg_rent_2b)),
-                    c("Median 2B Rent", cl_sum$cl_med_rent_2b),
-                    c("Average Sqft", round(cl_sum$cl_avg_sqft)),
-                    c("Median Sqft", cl_sum$cl_med_sqft),
+cl_sum_tbl <- rbind(c("Listing Count", formatC(cl_sum$cl_listing_count, format = "d", big.mark = ",")), 
+                    c("Average Rent", formatC(round(cl_sum$cl_avg_rent, 1), format = "d", big.mark = ",")), 
+                    c("Median Rent", formatC(cl_sum$cl_med_rent, format = "d", big.mark = ",")), 
+                    c("Average 2B Rent", formatC(cl_sum$cl_avg_rent_2b, format = "d", big.mark = ",")), 
+                    c("Median 2B Rent", formatC(cl_sum$cl_med_rent_2b, format = "d", big.mark = ",")), 
+                    c("Average Sqft", formatC(round(cl_sum$cl_avg_sqft, 0), format = "d", big.mark = ",")), 
+                    c("Median Sqft", formatC(cl_sum$cl_med_sqft, format = "d", big.mark = ",")), 
                     c("Average Bedrooms", round(cl_sum$cl_avg_beds, 2)),
                     c("Median Bedrooms", cl_sum$cl_med_beds))
 colnames(cl_sum_tbl) <- c("Statistic", as.character(cl_sum$def))
@@ -74,15 +74,15 @@ apts_sum$def <- factor(apts_sum$def)
 apts_sum <- arrange(apts_sum, desc(def))
 
 #make a summary table with labels
-apts_sum_tbl <- rbind(c("Listing Count", apts_sum$apts_listing_count), 
-                    c("Average Rent", round(apts_sum$apts_avg_rent)),
-                    c("Median Rent", apts_sum$apts_med_rent), 
-                    c("Average 2B Rent", round(apts_sum$apts_avg_rent_2b)),
-                    c("Median 2B Rent", apts_sum$apts_med_rent_2b),
-                    c("Average Sqft", round(apts_sum$apts_avg_sqft)),
-                    c("Median Sqft", apts_sum$apts_med_sqft),
-                    c("Average Bedrooms", round(apts_sum$apts_avg_beds, 2)),
-                    c("Median Bedrooms", apts_sum$apts_med_beds))
+apts_sum_tbl <- rbind(c("Listing Count", formatC(apts_sum$apts_listing_count, format = "d", big.mark = ",")), 
+                      c("Average Rent", formatC(round(apts_sum$apts_avg_rent, 1), format = "d", big.mark = ",")), 
+                      c("Median Rent", formatC(apts_sum$apts_med_rent, format = "d", big.mark = ",")), 
+                      c("Average 2B Rent", formatC(apts_sum$apts_avg_rent_2b, format = "d", big.mark = ",")), 
+                      c("Median 2B Rent", formatC(apts_sum$apts_med_rent_2b, format = "d", big.mark = ",")), 
+                      c("Average Sqft", formatC(round(apts_sum$apts_avg_sqft, 0), format = "d", big.mark = ",")), 
+                      c("Median Sqft", formatC(apts_sum$apts_med_sqft, format = "d", big.mark = ",")), 
+                      c("Average Bedrooms", round(apts_sum$apts_avg_beds, 2)),
+                      c("Median Bedrooms", apts_sum$apts_med_beds))
 colnames(apts_sum_tbl) <- c("Statistic", as.character(apts_sum$def))
 
 #convert to Latex and print to console
@@ -106,7 +106,10 @@ tract_mdata <- tract_mdata %>%
          over_under  = case_when(lambda > 1 ~ "Overrepresented",
                                 lambda < 1 ~ "Underrepresented"),
          trt_med_yr_rent_hu_blt = ifelse(trt_med_yr_rent_hu_blt <= 1600, 
-                                         NA, trt_med_yr_rent_hu_blt))
+                                         NA, trt_med_yr_rent_hu_blt)) %>%
+  group_by(platform, met_id) %>%
+  mutate(met_sub_rate = sum(trt_tot_pop[city_sub == "Suburb"])/sum(trt_tot_pop)) %>%
+  ungroup()
 
 
 #### Listwise delete ----------------------------------------------------------
@@ -117,8 +120,8 @@ vars_set <- c("trt_shr_col_grad", "trt_med_hh_inc", "trt_shr_wht",
               "trt_shr_nonrel", "trt_shr_age_20_34", "trt_shr_male", 
               "trt_shr_age_65plus", "trt_shr_blt_pre_1940", "trt_pop_dens",
               "trt_shr_same_home", "trt_shr_for_born", "trt_avg_hh_size",
-              "trt_shr_lat", "trt_shr_blk", "trt_shr_hcb", "trt_shr_pov",
-              "dist_to_cbd")
+              "trt_shr_lat", "trt_shr_blk", "trt_shr_api", "trt_shr_aina",
+              "trt_shr_oth", "trt_shr_hcb", "trt_shr_pov", "dist_to_cbd")
 
 tract_mdata <- tract_mdata %>%
   filter_at(vars(all_of(vars_set)), all_vars(!is.na(.))) %>%
@@ -128,30 +131,36 @@ tract_mdata <- tract_mdata %>%
 #### Summarize spatial compression and other distribution metrics -------------
 
 zero_vac <- tract %>%
+  filter(trt_id %in% tract_mdata$trt_id) %>%
   st_drop_geometry %>%
   group_by(def) %>%
   summarize(n_cl_listings = sum(cl_listing_count),
             n_apts_listings = sum(apts_listing_count),
             cl_gini = round(DescTools::Gini(cl_listing_count), 2),
             apts_gini = round(DescTools::Gini(apts_listing_count), 2),
-            n_cl_zero_vac = sum(cl_listing_count[trt_tot_vac_hu_for_rent==0]),
-            n_apts_zero_vac = sum(apts_listing_count[trt_tot_vac_hu_for_rent==0]),
+            n_cl_zero_vac = sum(cl_listing_count[trt_tot_vac_hu_for_rent == 0]),
+            n_apts_zero_vac = sum(apts_listing_count[trt_tot_vac_hu_for_rent == 0]),
             platform_dis = round((.5) * sum(abs(cl_listing_count/sum(cl_listing_count) - 
                                    apts_listing_count/sum(apts_listing_count))), 2),
-            platform_dis = round((.5) * sum(abs(cl_listing_count/sum(cl_listing_count) - 
-                                            trt_tot_vac_hu_for_rent/sum(trt_tot_vac_hu_for_rent))), 2)) %>%
+            avg_cl_lambda_zero_vac = round(mean(cl_lambda[trt_tot_vac_hu_for_rent == 0])),
+            avg_apts_lambda_zero_vac = round(mean(apts_lambda[trt_tot_vac_hu_for_rent == 0]))) %>%
   mutate(pct_cl_zero_vac = round(n_cl_zero_vac/n_cl_listings, 2),
          pct_apts_zero_vac = round(n_apts_zero_vac/n_apts_listings, 2)) %>%
-  select(-starts_with("n"))
+  select(def, cl_gini, apts_gini, platform_dis, pct_cl_zero_vac, pct_apts_zero_vac,
+         avg_cl_lambda_zero_vac, avg_apts_lambda_zero_vac)
+
 zero_vac$def <- factor(zero_vac$def)
 zero_vac$def <- factor(zero_vac$def, levels = levels(zero_vac$def)[c(4, 3, 5, 2, 1)])
 zero_vac <- arrange(zero_vac, def) %>% t()
 colnames(zero_vac) <- zero_vac[1,]
 zero_vac <- zero_vac[-1,]
 rownames(zero_vac) <- c("Craigslist Gini", "Apartments.com Gini",
-                        "Platform Dissimilarity", "Prop. Craigslist in Zero Vacant For Rent Tract",
-                        "Prop. Apartments.com in Zero Vacant For Rent Tract")
-zero_vac <- xtable(zero_vac, caption = "Distribution summary statistics by data definition")
+                        "Platform Dissimilarity", 
+                        "Prop. Craigslist in Zero Vacant For Rent Tract",
+                        "Prop. Apartments.com in Zero Vacant For Rent Tract",
+                        "Avg. Craigslist Lambda in Zero Vacant For Rent Tract",
+                        "Avg. Apartments.com Lambda in Zero Vacant For Rent Tract")
+zero_vac <- xtable(zero_vac, caption = "Spatial compression, platform segregation and representation of listings in zero vacancy tracts by data definition")
 print(zero_vac, booktabs = TRUE, file = "./output/desc/distribution.tex")
 
 #### Select preferred data definition for remaining analysis -----------------
@@ -256,7 +265,7 @@ diff_in_means_overall <- tract_mdata %>%
   st_drop_geometry() %>%
   filter(!is.na(over_under)) %>%
   group_by(platform) %>%
-  summarize_at(vars(all_of(vars_set)),
+  summarize_at(vars(all_of(vars_set), -trt_med_yr_rent_hu_blt),
                list(~ list(cohen.d(., f = over_under, pooled = T)))) %>%
   rowwise() %>%
   mutate_at(.vars = vars(-platform),
@@ -274,14 +283,15 @@ diff_in_means_overall <- tract_mdata %>%
          upper = ci[[2]], mag = mag[[1]]) %>%
   ungroup() %>%
   mutate(variable = as_factor(variable),
-         variable = fct_reorder(variable, estimate))
+         variable = fct_reorder(variable, estimate)) %>%
+  mutate(city_sub = "Overall")
 
 #city/suburb cohen's d analysis for each source
 diff_in_means_city_sub <- tract_mdata %>%
   st_drop_geometry() %>%
   filter(!is.na(over_under)) %>%
   group_by(platform, city_sub) %>%
-  summarize_at(vars(all_of(vars_set)),
+  summarize_at(vars(all_of(vars_set), -trt_med_yr_rent_hu_blt),
                list(~ list(cohen.d(., f = over_under, pooled = T)))) %>%
   rowwise() %>%
   mutate_at(.vars = vars(-platform, -city_sub),
@@ -302,38 +312,26 @@ diff_in_means_city_sub <- tract_mdata %>%
   mutate(variable = as_factor(variable)) %>%
   ungroup()
 
+diff_in_means <- bind_rows(diff_in_means_overall, diff_in_means_city_sub)
+
 diff_in_means_city_sub$variable <- factor(diff_in_means_city_sub$variable,
                                        levels = levels(diff_in_means_overall$variable))
 
-var_labels <- rev(c("College Degree", "Median HH Income", "Median Gross Rent",
-                    "Median N Rooms", "Non-Latino White", "Single Family Home", "Median Owned HU Value",
-                    "Speaking English Only", "Male", "College Student",  "Age 65+", "Nonrelatives in HH",
-                    "Average HH Size", "Same Home Last Year", "Age 20-34",  "Distance to CBD", "Foreign Born",
-                    "Population Density", "Latino", "HU Built Before 1940",  "Housing Cost Burdened", "Non-Latino Black",
+var_labels <- rev(c("Median HH Income", "College Degree", "Median Gross Rent",
+                    "Median N Rooms", "NL White", "Single Family Home", 
+                    "Median Owned HU Value", "Speaking English Only", "NL Asian/Pac. Isl.",
+                    "NL Other Race" , "Male",  "Age 65+", "College Student", 
+                    "Same Home Last Year", "Average HH Size", "Nonrelatives in HH",
+                    "Distance to CBD", "NL Nat. Amer./Ala. Nat.",
+                     "Age 20-34",   "Foreign Born", "Population Density", 
+                    "HU Built Before 1940", "Latinx", "Housing Cost Burdened", "NL Black",
                     "Poverty Rate"))
 
-#overall plot
-ggplot(diff_in_means_overall, 
-       aes(x = estimate, y = variable, shape = platform, color = platform,
-           xmin = lower, xmax = upper)) +
-  geom_vline(xintercept = 0, color = "grey60") +
-  geom_point(size = 2) +
-  geom_errorbar(width = 0) +
-  scale_x_continuous(limits = c(-.8, .8), 
-                     breaks = c(-.8, -.5, -.2, 0, .2, .5, .8), 
-                     minor_breaks = F) +
-  scale_y_discrete(labels = var_labels) +
-  theme_minimal() +
-  theme(legend.position = "bottom",
-        plot.margin = unit(c(.25, .25, .25, .25), "in"),
-        panel.spacing.x = unit(.25, "in")) +
-  labs(x = "\nCohen's d estimate", y = "", 
-       color = "Platform", shape = "Platform") +
-  ggsave(filename = "./output/desc/overall_diff_in_means.pdf",
-         width = 8, height = 6, dpi = 300)
+diff_in_means$city_sub <- factor(diff_in_means$city_sub)
+diff_in_means$city_sub <- factor(diff_in_means$city_sub, levels = levels(diff_in_means$city_sub)[c(2,1,3)])
 
-#city/suburb plot
-ggplot(diff_in_means_city_sub, 
+#overall plot - unlabeled
+ggplot(diff_in_means, 
        aes(x = estimate, y = variable, shape = platform, color = platform,
            xmin = lower, xmax = upper)) +
   facet_grid(~ city_sub) +
@@ -341,17 +339,39 @@ ggplot(diff_in_means_city_sub,
   geom_point(size = 2) +
   geom_errorbar(width = 0) +
   scale_x_continuous(limits = c(-.8, .8), 
-                     breaks = c(-.8, -.5, -.2, 0, .2, .5, .8),
+                     breaks = c(-.8, -.5, -.2, .2, .5, .8),
                      minor_breaks = F) +
-  scale_y_discrete(labels = var_labels) +
+  #scale_y_discrete(labels = var_labels) +
   theme_minimal() +
   theme(legend.position = "bottom",
         plot.margin = unit(c(.25, .25, .25, .25), "in"),
         panel.spacing.x = unit(.25, "in")) +
   labs(x = "\nCohen's d estimate", y = "", 
        color = "Platform", shape = "Platform") +
-  ggsave(filename = "./output/desc/city_sub_diff_in_means.pdf",
-         width = 8, height = 6, dpi = 300)
+  ggsave(filename = "./output/desc/diff_in_means_unlabelled.pdf",
+         width = 7, height = 4, dpi = 300)
+
+ggplot(diff_in_means, 
+       aes(x = estimate, y = variable, shape = platform, color = platform,
+           xmin = lower, xmax = upper)) +
+  facet_grid(~ city_sub) +
+  geom_vline(xintercept = 0, color = "grey60") +
+  geom_point(size = 2) +
+  geom_errorbar(width = 0) +
+  scale_x_continuous(limits = c(-.8, .8), 
+                     breaks = c(-.8, -.5, -.2, .2, .5, .8),
+                     minor_breaks = F) +
+  scale_y_discrete(labels = var_labels) +
+  theme_minimal() +
+  theme(legend.position = "bottom",
+        plot.margin = unit(c(.25, .25, .25, .25), "in"),
+        panel.spacing.x = unit(.25, "in"),
+        axis.text.x = element_text(size = 7),
+        axis.text.y = element_text(size = 8)) +
+  labs(x = "\nCohen's d estimate", y = "", 
+       color = "Platform", shape = "Platform") +
+  ggsave(filename = "./output/desc/diff_in_means.pdf",
+         width = 7, height = 4.5, dpi = 400)
 
 
 #### Replication linear model estimation --------------------------------------
@@ -450,202 +470,292 @@ stargazer(rep_lm_lambda_cl, rep_lm_lambda_apts,
                                "log(Distance to CBD)", "HU Built Before 1940", "Median N Rooms", "Median Gross Rent",
                                "log(Median HH Income)", "Age 20-34", "Age 65+", "College Student",
                                "Speaking English Only", "log(Average HH Size)", "College Graduate",
-                               "Non-Latino Black", "Latino", "Non-Latino White", 
-                               "log(Median HH Income) $\\times$ Non-Latino White"),
+                               "Non-Latinx Black", "Latinx", "Non-Latinx White", 
+                               "log(Median HH Income) $\\times$ Non-Latinx White"),
           notes.label = "Robust (HC3) Standard Errors in Parentheses",
           out = "./output/model/replication_models.tex")
 
 
-#### GAM of differences in representation -------------------------------------
+#### extension linear model estimation ---------------------------------------------------
 
-#Extension 1: 
-gam_lambda_form_1 <- log(lambda) ~ 
-  trt_tot_rent_hu + s(trt_vac_rate) +
-  trt_shr_same_home + log(dist_to_cbd) + trt_shr_blt_pre_1940 +
-  trt_med_n_rooms + trt_med_gross_rent + log(trt_med_hh_inc) +  trt_shr_age_20_34 + 
-  trt_shr_age_65plus + trt_shr_col_stud + trt_shr_eng_only + 
-  log(trt_avg_hh_size) + trt_shr_col_grad +
-  trt_shr_blk + trt_shr_lat + 
-  trt_shr_wht * log(trt_med_hh_inc) + met_id
+ext_lm_lambda_form <- log(lambda) ~ 
+  trt_shr_blk + trt_shr_lat + trt_shr_api + trt_shr_aina + trt_shr_oth + 
+  trt_shr_pov + trt_shr_col_grad + log(trt_med_hh_inc) + 
+  trt_tot_rent_hu + trt_vac_rate + trt_shr_blt_pre_1940 + 
+  trt_med_n_rooms + trt_med_gross_rent +
+  trt_shr_same_home + log(dist_to_cbd) +
+  trt_shr_age_20_34 + trt_shr_age_65plus + trt_shr_col_stud + trt_shr_eng_only + 
+  log(trt_avg_hh_size)  
 
-#Extension 2: Metro segregation interactions with racial/ethnic differences
-gam_lambda_form_2 <- log(lambda) ~ 
-  trt_tot_rent_hu + s(trt_vac_rate) +
-  trt_shr_same_home + log(dist_to_cbd) + trt_shr_blt_pre_1940 +
-  trt_med_n_rooms + trt_med_gross_rent + log(trt_med_hh_inc) + trt_shr_age_20_34 + 
-  trt_shr_age_65plus + trt_shr_col_stud + trt_shr_eng_only + 
-  log(trt_avg_hh_size) + trt_shr_col_grad +
-  trt_shr_blk + trt_shr_lat + 
-  trt_shr_wht * log(trt_med_hh_inc) +
-  I(dis_blk_wht * trt_shr_blk) + 
-  I(dis_lat_wht * trt_shr_lat) + met_id
 
-#estimate GAMs for each platform
-gam_lambda_cl_1 <- gam(gam_lambda_form_1,
-                       data = tract_mdata %>% 
-                         filter(platform == "Craigslist"),
-                       family = gaussian,
-                       method = "REML",
-                       select = TRUE)
+## Overall
 
-gam_lambda_cl_2 <- gam(gam_lambda_form_2,
-                       data = tract_mdata %>% 
-                         filter(platform == "Craigslist"),
-                       family = gaussian,
-                       method = "REML",
-                       select = TRUE)
+#estimate linear models for each platform
+ext_lm_lambda_cl <- lm(ext_lm_lambda_form,
+                       data = tract_mdata %>%
+                         filter(platform == "Craigslist"))
 
-gam_lambda_apts_1 <- gam(gam_lambda_form_1,
+ext_lm_lambda_apts <- lm(ext_lm_lambda_form,
                          data = tract_mdata %>% 
-                           filter(platform == "Apartments.com"),
-                         family = gaussian,
-                         method = "REML",
-                         select = TRUE)
+                           filter(platform == "Apartments.com"))
 
-gam_lambda_apts_2 <- gam(gam_lambda_form_2,
-                         data = tract_mdata %>% 
-                           filter(platform == "Apartments.com"),
-                         family = gaussian,
-                         method = "REML",
-                         select = TRUE)
+## Cities
 
-#GAM summary tables
-summary(gam_lambda_cl_1)
-summary(gam_lambda_cl_2)
-summary(gam_lambda_apts_1)
-summary(gam_lambda_apts_2)
+ext_lm_lambda_cl_city <- lm(ext_lm_lambda_form,   
+                            data = tract_mdata %>% 
+                              filter(platform == "Craigslist", 
+                                     city_sub == "City"))
 
-#GAM diagnostics
-#gam.check(gam_lambda_cl)
-#gam.check(gam_lambda_apts)
+ext_lm_lambda_apts_city <- lm(ext_lm_lambda_form,
+                              data = tract_mdata %>% 
+                                filter(platform == "Apartments.com", 
+                                       city_sub == "City"))
 
-#simple plots for smooth term effects
-#plot(gam_lambda_cl)
-#plot(gam_lambda_apts)
+## Suburbs
 
-#compare IC
-BIC(rep_lm_lambda_cl)
-BIC(gam_lambda_cl_1)
-BIC(gam_lambda_cl_2)
+ext_lm_lambda_cl_sub <- lm(ext_lm_lambda_form,
+                           data = tract_mdata %>% 
+                             filter(platform == "Craigslist", 
+                                    city_sub == "Suburb"))
 
-BIC(rep_lm_lambda_apts)
-BIC(gam_lambda_apts_1)
-BIC(gam_lambda_apts_2)
+ext_lm_lambda_apts_sub <- lm(ext_lm_lambda_form,
+                             data = tract_mdata %>% 
+                               filter(platform == "Apartments.com", 
+                                      city_sub == "Suburb"))
 
+#summary of regression coefficients
+summary(ext_lm_lambda_cl)
+summary(ext_lm_lambda_apts)
+summary(ext_lm_lambda_cl_city)
+summary(ext_lm_lambda_apts_city)
+summary(ext_lm_lambda_cl_sub)
+summary(ext_lm_lambda_apts_sub)
 
-#### Output GAM coefficient table ---------------------------------------------
+#summary of regression coefficients with HC SEs
+lmtest::coeftest(ext_lm_lambda_cl, vcov = vcovHC(ext_lm_lambda_cl))
+lmtest::coeftest(ext_lm_lambda_apts, vcov = vcovHC(ext_lm_lambda_apts))
+lmtest::coeftest(ext_lm_lambda_cl_city, vcov = vcovHC(ext_lm_lambda_cl_city))
+lmtest::coeftest(ext_lm_lambda_apts_city, vcov = vcovHC(ext_lm_lambda_apts_city))
+lmtest::coeftest(ext_lm_lambda_cl_sub, vcov = vcovHC(ext_lm_lambda_cl_sub))
+lmtest::coeftest(ext_lm_lambda_apts_sub, vcov = vcovHC(ext_lm_lambda_apts_sub))
 
-stargazer::stargazer(gam_lambda_cl_1, gam_lambda_apts_1,
-                     gam_lambda_cl_2, gam_lambda_apts_2,
-                     omit = c("trt_vac_rate", "trt_med_yr_rent_hu_blt", "met_id"),
-                     covariate.labels = c("Total Rental HU", "\\% in Same Home Last Year",
-                                          "log(Distance to CBD)", "\\% HU Built Before 1940", "Median N Rooms", "Median Gross Rent",
-                                          "log(Median HH Income)", "\\% Age 20-34", "\\% Age 65+", "\\% College Student",
-                                          "\\% Speaking English Only", "log(Average HH Size)", "\\% College Graduate",
-                                          "\\% Non-Latino Black", "\\% Latino", "\\% Non-Latino White", 
-                                          "Black-White Segregation", "Latino-White Segregation",
-                                          "log(Median HH Income) $\\times$ \\% Non-Latino White",
-                                          "Black-White Segregation $\\times$ \\% Non-Latino Black",
-                                          "Latino-White Segregation $\\times$ \\% Latino"),
-                     add.lines = list(c("BIC", 
-                                        round(BIC(gam_lambda_cl_1),1), 
-                                        round(BIC(gam_lambda_apts_1),1),
-                                        round(BIC(gam_lambda_cl_2),1), 
-                                        round(BIC(gam_lambda_apts_2),1)),
-                                      c("Metro Fixed Effects?", rep("Yes", 4)),
-                                      c("Includes Smooth for Vacancy $\\times$ Median Year Blt", rep("Yes", 4))),
-                     column.separate = c(2, 2),
-                     column.labels = c("Model 1", "Model 2"),
-                     dep.var.caption = "",
-                     keep.stat = c("n"),
-                     style = "demography",
-                     title = "Generalized Additive Models (GAM) of log(Lambda) for Craigslist and Apartments.com",
-                     out = "./output/model/gam.tex")
+#plot residuals (seems there are some outliers with leverage)
+#plot(lm_lambda_cl)
+#plot(lm_lambda_apts)
 
 
-## Overall smooth term plots --------------------------------------------------
+#### Output extension model table for latex ---------------------------------
 
-### Vacancy X Median Year Built Tensor Product Smooth
+stargazer(ext_lm_lambda_cl, ext_lm_lambda_apts, 
+          ext_lm_lambda_cl_city, ext_lm_lambda_apts_city, 
+          ext_lm_lambda_cl_sub, ext_lm_lambda_apts_sub,
+          se = list(sqrt(diag(vcovHC(ext_lm_lambda_cl))),
+                    sqrt(diag(vcovHC(ext_lm_lambda_apts))),
+                    sqrt(diag(vcovHC(ext_lm_lambda_cl_city))),
+                    sqrt(diag(vcovHC(ext_lm_lambda_apts_city))),
+                    sqrt(diag(vcovHC(ext_lm_lambda_cl_sub))),
+                    sqrt(diag(vcovHC(ext_lm_lambda_apts_sub)))),
+          omit = "met_id",
+          keep.stat = c("n", "rsq"),
+          add.lines=list(c("BIC", 
+                           round(BIC(ext_lm_lambda_cl),1), 
+                           round(BIC(ext_lm_lambda_apts),1),
+                           round(BIC(ext_lm_lambda_cl_city),1), 
+                           round(BIC(ext_lm_lambda_apts_city),1),
+                           round(BIC(ext_lm_lambda_cl_sub),1), 
+                           round(BIC(ext_lm_lambda_apts_sub),1))),
+          column.separate = c(2, 2, 2),
+          column.labels = c("Overall", "City", "Suburb"),
+          style = "demography",
+          title = "Linear regressions of log(Lambda) for Craigslist and Apartments.com",
+          covariate.labels = c("Non-Latinx Black", "Latinx", "Non-Latinx Asian/Pac. Islander",
+                               "Non-Latinx Native American/Alaska Native", "Non-Latinx Other Race",
+                               "Poverty Rate", "College Degree", "log(Median HH Income)", 
+                               "Total Rental HU", "Vacancy Rate", "Built Before 1940", 
+                               "Median N Rooms", "Median Gross Rent", "Same Home Last Year",
+                               "log(Distance to CBD)", "Age 20-34", "Age 65+", "College Student",
+                               "English Speaking Only", "log(Average HH Size)"),
+          notes.label = "Robust (HC3) Standard Errors in Parentheses",
+          out = "./output/model/extension_models.tex")
 
-#estimate linear predictions at different vacancy vals with other covariates at means
-#lm_cl_plot <- visreg(rep_lm_lambda_cl, 
-#                      xvar = "trt_vac_rate",
-#                      plot = FALSE)$fit %>%
-#  mutate(platform = "Craigslist", fit = "Linear")
-#lm_apts_plot <- visreg(rep_lm_lambda_apts, 
-#                        xvar = "trt_vac_rate", 
-#                        plot = FALSE)$fit %>%
-#  mutate(platform = "Apartments.com", fit = "Linear")
+#### Segregation model for differences in representation -------------------------------------
 
-#estimate GAM predictions at different vacancy and med yr vals with other covariates at means
-gam_cl_plot_vac <- visreg(gam_lambda_cl_2, 
-                      xvar = "trt_vac_rate",
-                   #   by = "trt_med_yr_rent_hu_blt",
-                      plot = FALSE)$fit %>%
-  mutate(platform = "Craigslist", fit = "Spline")
+seg_lambda_form <- log(lambda) ~ 
+  trt_shr_blk + trt_shr_lat + trt_shr_api + trt_shr_aina + trt_shr_oth + 
+  trt_shr_pov + trt_shr_col_grad + log(trt_med_hh_inc) + 
+  trt_tot_rent_hu + trt_vac_rate + trt_shr_blt_pre_1940 + 
+  trt_med_n_rooms + trt_med_gross_rent +
+  trt_shr_same_home + log(dist_to_cbd) +
+  trt_shr_age_20_34 + trt_shr_age_65plus + trt_shr_col_stud + trt_shr_eng_only + 
+  log(trt_avg_hh_size) +
+  dis_blk_wht + dis_lat_wht + dis_poor_nonpoor +
+  I(dis_blk_wht * trt_shr_blk) +
+  I(dis_lat_wht * trt_shr_lat) + 
+  I(dis_poor_nonpoor * trt_shr_pov) +
+  met_shr_blk + met_shr_lat + met_shr_api + met_shr_aina + met_shr_oth + 
+  met_shr_pov + met_shr_col_grad + log(met_med_hh_inc) + 
+  met_tot_rent_hu + met_vac_rate + met_shr_blt_pre_1940 + 
+  met_med_n_rooms + met_med_gross_rent +
+  met_shr_same_home + met_shr_age_20_34 + met_shr_age_65plus +
+  met_shr_col_stud + met_shr_eng_only + log(met_avg_hh_size)
 
-gam_apts_plot_vac <- visreg(gam_lambda_apts_2, 
-                        xvar = "trt_vac_rate", 
-                     #   by = "trt_med_yr_rent_hu_blt",
-                        plot = FALSE)$fit %>%
-  mutate(platform = "Apartments.com", fit = "Spline")
+#estimate models for each platform
+seg_lm_lambda_cl <- lm(seg_lambda_form,
+                     data = tract_mdata %>% 
+                       filter(platform == "Craigslist"))
 
-#combined different platform's predictions into a tbl, trim to 10th/90th Ptiles of vac
-gam_plot_vac <- bind_rows(gam_cl_plot_vac, gam_apts_plot_vac) %>%
-  filter(trt_vac_rate >= 0,
-         trt_vac_rate <= 0.15)
+seg_lm_lambda_apts <- lm(seg_lambda_form,
+                      data = tract_mdata %>% 
+                        filter(platform == "Apartments.com"))
 
-#plot the predictions, save to disk
-ggplot(gam_plot_vac, aes(x = trt_vac_rate*100, y = visregFit, 
-                    # color = as.factor(trt_med_yr_rent_hu_blt), 
-                    # fill = as.factor(trt_med_yr_rent_hu_blt),
-                    # group = as.factor(trt_med_yr_rent_hu_blt),
-                     ymin = visregLwr, ymax = visregUpr)) +
-  facet_grid(~ platform) +
-  geom_line() +
-  geom_ribbon(alpha = .5, color = NA) +
-  scale_x_continuous(labels = function(x){paste0(x, "%")}) +
- # scale_color_brewer(palette = "Set1", 
-#                     labels = c("1952 (10th Ptile)", "1974 (50th Ptile)", "1996 (90th Ptile)")) +
- ## scale_fill_brewer(palette = "Set1", 
-  #                  labels = c("1952 (10th Ptile)", "1974 (50th Ptile)", "1996 (90th Ptile)")) +
-  theme_minimal() +
-  theme(panel.spacing = unit(.25, "in"),
-        plot.margin = unit(c(.25, .25, .25, .25), "in"),
-        legend.position = "bottom") +
-  labs(x = "\nVacancy Rate", y = "Predicted log(Lambda)\n") +
-  ggsave(filename = "./output/model/vac_rate_smoothed_effect.pdf",
-         width = 8, height = 6, dpi = 300)
+seg_lm_lambda_cl_city <- lm(seg_lambda_form,
+                    data = tract_mdata %>% 
+                      filter(platform == "Craigslist",
+                             city_sub == "City"))
 
+seg_lm_lambda_apts_city <- lm(seg_lambda_form,
+                      data = tract_mdata %>% 
+                        filter(platform == "Apartments.com",
+                               city_sub == "City"))
 
-### Metropolitan segregation and % black interaction --------------------------
+seg_lm_lambda_cl_sub <- lm(seg_lambda_form,
+                    data = tract_mdata %>% 
+                      filter(platform == "Craigslist",
+                             city_sub == "Suburb"))
 
-#predict log(lambda) at different % black and segregation values
-gam_cl_plot_shr_blk <- visreg(gam_lambda_cl_2, 
-                      xvar = "trt_shr_blk",
-                      by = "dis_blk_wht",
-                      plot = FALSE)$fit %>%
-  mutate(platform = "Craigslist", fit = "Spline")
-gam_apts_plot_shr_blk <- visreg(gam_lambda_apts_2, 
-                        xvar = "trt_shr_blk", 
-                        by = "dis_blk_wht",
-                        plot = FALSE)$fit %>%
-  mutate(platform = "Apartments.com", fit = "Spline")
+seg_lm_lambda_apts_sub <- lm(seg_lambda_form,
+                      data = tract_mdata %>% 
+                        filter(platform == "Apartments.com",
+                               city_sub == "Suburb"))
+
+#summary of regression coefficients
+summary(seg_lm_lambda_cl)
+summary(seg_lm_lambda_apts)
+summary(seg_lm_lambda_cl_city)
+summary(seg_lm_lambda_apts_city)
+summary(seg_lm_lambda_cl_sub)
+summary(seg_lm_lambda_apts_sub)
+
+#summary of regression coefficients with HC SEs
+lmtest::coeftest(seg_lm_lambda_cl, vcov = vcovHC(seg_lm_lambda_cl))
+lmtest::coeftest(seg_lm_lambda_apts, vcov = vcovHC(seg_lm_lambda_apts))
+lmtest::coeftest(seg_lm_lambda_cl_city, vcov = vcovHC(seg_lm_lambda_cl_city))
+lmtest::coeftest(seg_lm_lambda_apts_city, vcov = vcovHC(seg_lm_lambda_apts_city))
+lmtest::coeftest(seg_lm_lambda_cl_sub, vcov = vcovHC(seg_lm_lambda_cl_sub))
+lmtest::coeftest(seg_lm_lambda_apts_sub, vcov = vcovHC(seg_lm_lambda_apts_sub))
+
+#### Output segregation model table for latex ---------------------------------
+
+stargazer(seg_lm_lambda_cl, seg_lm_lambda_apts, 
+          seg_lm_lambda_cl_city, seg_lm_lambda_apts_city, 
+          seg_lm_lambda_cl_sub, seg_lm_lambda_apts_sub,
+          se = list(sqrt(diag(vcovHC(seg_lm_lambda_cl))),
+                    sqrt(diag(vcovHC(seg_lm_lambda_apts))),
+                    sqrt(diag(vcovHC(seg_lm_lambda_cl_city))),
+                    sqrt(diag(vcovHC(seg_lm_lambda_apts_city))),
+                    sqrt(diag(vcovHC(seg_lm_lambda_cl_sub))),
+                    sqrt(diag(vcovHC(seg_lm_lambda_apts_sub)))),
+          omit = "met_id",
+          keep.stat = c("n", "rsq"),
+          add.lines=list(c("BIC", 
+                           round(BIC(seg_lm_lambda_cl),1), 
+                           round(BIC(seg_lm_lambda_apts),1),
+                           round(BIC(seg_lm_lambda_cl_city),1), 
+                           round(BIC(seg_lm_lambda_apts_city),1),
+                           round(BIC(seg_lm_lambda_cl_sub),1), 
+                           round(BIC(seg_lm_lambda_apts_sub),1))),
+          column.separate = c(2, 2, 2),
+          column.labels = c("Overall", "City", "Suburb"),
+          style = "demography",
+          title = "Linear models of segregation interaction with racial/ethnic composition",
+          covariate.labels = c("Non-Latinx Black", "Latinx", "Non-Latinx Asian/Pac. Islander",
+                               "Non-Latinx Native American/Alaska Native", "Non-Latinx Other Race",
+                               "Poverty Rate", "College Degree", "log(Median HH Income)", 
+                               "Total Rental HU", "Vacancy Rate", "Built Before 1940", 
+                               "Median N Rooms", "Median Gross Rent", "Same Home Last Year",
+                               "log(Distance to CBD)", "Age 20-34", "Age 65+", "College Student",
+                               "English Speaking Only", "log(Average HH Size)",
+                               "Black-White Segregation", "Latino White Segregation", "Poverty Segregation",
+                               "Black-White Segregation \times NL Black",
+                               "Latinx-White Segregation \times Latinx",
+                               "Poverty Segregation \times Poverty Rate",
+                               "Metro NL Black", "Metro Latinx", "Metro NL Asian/Pac. Islander",
+                               "Metro NL Native American/Alaska Native", "Metro NL Other Race",
+                               "Metro Poverty Rate", "Metro College Degree", "Metro log(Median HH Income)",
+                               "Metro Total Rental HU", "Metro Vacancy Rate", "Metro Built Before 1940",
+                               "Metro Median N Rooms", "Metro Median Gross Rent", "Metro Same Home Last Year",
+                               "Metro Age 20-34", "Metro Age 65+", "Metro College Student", "Metro English Speaking Only",
+                               "Metro log(Average HH Size)"),
+          float.env = "table",
+          notes.label = "Robust (HC3) Standard Errors in Parentheses",
+          out = "./output/model/segregation_models.tex")
+
+#### Output segregation model predictions --------------------------------------
+
+#predict lambda at different % black and segregation values
+cl_plot_shr_blk <- visreg(seg_lm_lambda_cl, 
+                               xvar = "trt_shr_blk",
+                               by = "dis_blk_wht",
+                               breaks = c(.47, .60, .75), 
+                               trans = exp,
+                               plot = FALSE)$fit %>%
+  mutate(platform = "Craigslist", fit = "Spline", city_sub = "Overall")
+apts_plot_shr_blk <- visreg(seg_lm_lambda_apts, 
+                                 xvar = "trt_shr_blk", 
+                                 by = "dis_blk_wht",
+                                 breaks = c(.47, .60, .75),
+                                 trans = exp,
+                                 plot = FALSE)$fit %>%
+  mutate(platform = "Apartments.com", fit = "Spline", city_sub = "Overall")
+
+cl_plot_shr_blk_city <- visreg(seg_lm_lambda_cl_city, 
+                                   xvar = "trt_shr_blk",
+                                   by = "dis_blk_wht",
+                                   breaks = c(.47, .60, .75),
+                                   trans = exp,
+                                   plot = FALSE)$fit %>%
+  mutate(platform = "Craigslist", fit = "Spline", city_sub = "City")
+apts_plot_shr_blk_city <- visreg(seg_lm_lambda_apts_city, 
+                                 xvar = "trt_shr_blk", 
+                                 by = "dis_blk_wht",
+                                 breaks = c(.47, .60, .75), 
+                                 trans = exp,
+                                 plot = FALSE)$fit %>%
+  mutate(platform = "Apartments.com", fit = "Spline", city_sub = "City")
+
+cl_plot_shr_blk_sub <- visreg(seg_lm_lambda_cl_sub, 
+                              xvar = "trt_shr_blk",
+                              by = "dis_blk_wht",
+                              breaks = c(.47, .60, .75),
+                              trans = exp,
+                              plot = FALSE)$fit %>%
+  mutate(platform = "Craigslist", fit = "Spline", city_sub = "Suburb")
+apts_plot_shr_blk_sub <- visreg(seg_lm_lambda_apts_sub, 
+                                xvar = "trt_shr_blk", 
+                                by = "dis_blk_wht",
+                                breaks = c(.47, .60, .75),
+                                trans = exp,
+                                plot = FALSE)$fit %>%
+  mutate(platform = "Apartments.com", fit = "Spline", city_sub = "Suburb")
 
 #combine different platform predictions into a single tbl, limit to 0-30%
-gam_plot_shr_blk <- bind_rows(gam_cl_plot_shr_blk, gam_apts_plot_shr_blk) %>%
+plot_shr_blk <- bind_rows(cl_plot_shr_blk,apts_plot_shr_blk,
+                          cl_plot_shr_blk_city, apts_plot_shr_blk_city,
+                              cl_plot_shr_blk_sub, apts_plot_shr_blk_sub)  %>%
   filter(trt_shr_blk >= 0,
-         trt_shr_blk <= .4)
+         trt_shr_blk <= .5)
+plot_shr_blk$city_sub <- factor(plot_shr_blk$city_sub)
+plot_shr_blk$city_sub <- factor(plot_shr_blk$city_sub, levels = levels(plot_shr_blk$city_sub)[c(2, 1, 3)])
 
 #plot the predictions, save to disk
-ggplot(gam_plot_shr_blk, aes(x = trt_shr_blk*100, y = visregFit, 
-                     color = as.factor(dis_blk_wht), 
-                     fill = as.factor(dis_blk_wht),
-                     group = as.factor(dis_blk_wht),
-                     ymin = visregLwr, ymax = visregUpr)) +
-  facet_grid(~ platform) +
+ggplot(plot_shr_blk, aes(x = trt_shr_blk*100, y = visregFit, 
+                             color = as.factor(dis_blk_wht), 
+                             fill = as.factor(dis_blk_wht),
+                             group = as.factor(dis_blk_wht),
+                             ymin = visregLwr, ymax = visregUpr)) +
+  facet_grid(platform ~ city_sub) +
   geom_line() +
-  geom_ribbon(alpha = .5, color = NA) +
+  geom_ribbon(alpha = .25, color = NA) +
   theme_minimal() +
   theme(panel.spacing = unit(.25, "in"),
         plot.margin = unit(c(.25, .25, .25, .25), "in"),
@@ -653,70 +763,167 @@ ggplot(gam_plot_shr_blk, aes(x = trt_shr_blk*100, y = visregFit,
   scale_x_continuous(labels = function(x){paste0(x, "%")}) +
   scale_color_brewer(palette = "Set1", labels = c(".47 (10th Ptile)", ".60 (50th Ptile)", ".75 (90 Ptile)")) +
   scale_fill_brewer(palette = "Set1", labels = c(".47 (10th Ptile)", ".60 (50th Ptile)", ".75 (90 Ptile)")) +
-  labs(x = "\nShare Non-Latino Black", y = "Predicted log(Lambda)\n",
+  labs(x = "\nShare Non-Latinx Black", y = "Predicted Lambda\n",
        color = "Black-White Segregation", fill = "Black-White Segregation") +
-  ggsave(filename = "./output/model/shr_black_interaction_effect.pdf",
-         width = 8, height = 6, dpi = 300)
+  ggsave(filename = "./output/model/shr_black_interaction_effect_city_sub.pdf",
+         width = 7, height = 4, dpi = 300)
 
-### Metropolitan segregation and % Latino
 
-#predict log lambda at different seg and % Latino values with other variables at means
-gam_cl_plot_shr_lat <- visreg(gam_lambda_cl_2, 
+
+#predict log(lambda) at different % Latino and segregation values
+cl_plot_shr_lat <- visreg(seg_lm_lambda_cl, 
+                          xvar = "trt_shr_lat",
+                          by = "dis_lat_wht",
+                          breaks = c(.38, .48, .59),
+                          trans = exp,
+                          plot = FALSE)$fit %>%
+  mutate(platform = "Craigslist", fit = "Spline", city_sub = "Overall")
+apts_plot_shr_lat <- visreg(seg_lm_lambda_apts, 
+                            xvar = "trt_shr_lat", 
+                            by = "dis_lat_wht",
+                            breaks = c(.38, .48, .59),
+                            trans = exp,
+                            plot = FALSE)$fit %>%
+  mutate(platform = "Apartments.com", fit = "Spline", city_sub = "Overall")
+
+cl_plot_shr_lat_city <- visreg(seg_lm_lambda_cl_city, 
+                               xvar = "trt_shr_lat",
+                               by = "dis_lat_wht",
+                               breaks = c(.38, .48, .59),
+                               trans = exp,
+                               plot = FALSE)$fit %>%
+  mutate(platform = "Craigslist", fit = "Spline", city_sub = "City")
+apts_plot_shr_lat_city <- visreg(seg_lm_lambda_apts_city, 
+                                 xvar = "trt_shr_lat", 
+                                 by = "dis_lat_wht",
+                                 breaks = c(.38, .48, .59),
+                                 trans = exp,
+                                 plot = FALSE)$fit %>%
+  mutate(platform = "Apartments.com", fit = "Spline", city_sub = "City")
+
+cl_plot_shr_lat_sub <- visreg(seg_lm_lambda_cl_sub, 
                               xvar = "trt_shr_lat",
                               by = "dis_lat_wht",
+                              breaks = c(.38, .48, .59),
+                              trans = exp,
                               plot = FALSE)$fit %>%
-  mutate(platform = "Craigslist", fit = "Spline")
-gam_apts_plot_shr_lat <- visreg(gam_lambda_apts_2, 
+  mutate(platform = "Craigslist", fit = "Spline", city_sub = "Suburb")
+apts_plot_shr_lat_sub <- visreg(seg_lm_lambda_apts_sub, 
                                 xvar = "trt_shr_lat", 
                                 by = "dis_lat_wht",
+                                breaks = c(.38, .48, .59),
+                                trans = exp,
                                 plot = FALSE)$fit %>%
-  mutate(platform = "Apartments.com", fit = "Spline")
+  mutate(platform = "Apartments.com", fit = "Spline", city_sub = "Suburb")
 
-#combine platform predictions into single tbl, limit % latino to 0-30%
-gam_plot_shr_lat <- bind_rows(gam_cl_plot_shr_lat, gam_apts_plot_shr_lat) %>%
+#combine different platform predictions into a single tbl, limit to 0-30%
+plot_shr_lat <- bind_rows(cl_plot_shr_lat, apts_plot_shr_lat,
+                          cl_plot_shr_lat_city, apts_plot_shr_lat_city,
+                          cl_plot_shr_lat_sub, apts_plot_shr_lat_sub) %>%
   filter(trt_shr_lat >= 0,
-         trt_shr_lat <= .4)
+         trt_shr_lat <= .5)
+plot_shr_lat$city_sub <- factor(plot_shr_lat$city_sub)
+plot_shr_lat$city_sub <- factor(plot_shr_lat$city_sub, levels = levels(plot_shr_lat$city_sub)[c(2, 1, 3)])
 
 #plot the predictions, save to disk
-ggplot(gam_plot_shr_lat, aes(x = trt_shr_lat*100, y = visregFit, 
-                             color = as.factor(dis_lat_wht), 
-                             fill = as.factor(dis_lat_wht),
-                             group = as.factor(dis_lat_wht),
-                             ymin = visregLwr, ymax = visregUpr)) +
-  facet_grid(~ platform) +
+ggplot(plot_shr_lat, aes(x = trt_shr_lat*100, y = visregFit, 
+                         color = as.factor(dis_lat_wht), 
+                         fill = as.factor(dis_lat_wht),
+                         group = as.factor(dis_lat_wht),
+                         ymin = visregLwr, ymax = visregUpr)) +
+  facet_grid(platform ~ city_sub) +
   geom_line() +
-  geom_ribbon(alpha = .5, color = NA) +
-  scale_x_continuous(labels = function(x){paste0(x, "%")}) +
-  scale_color_brewer(palette = "Set1", labels = c(".38 (10th Ptile)", ".48 (50th Ptile)", ".59 (90 Ptile)")) +
-  scale_fill_brewer(palette = "Set1", labels = c(".38 (10th Ptile)", ".48 (50th Ptile)", ".59 (90 Ptile)")) +
+  geom_ribbon(alpha = .25, color = NA) +
   theme_minimal() +
   theme(panel.spacing = unit(.25, "in"),
         plot.margin = unit(c(.25, .25, .25, .25), "in"),
         legend.position = "bottom") +
-  labs(x = "\nShare Latino", y = "Predicted log(Lambda)\n",
-       color = "Latino-White Segregation", fill = "Latino-White Segregation") +  
-  ggsave(filename = "./output/model/shr_latino_interaction_effect.pdf",
-         width = 8, height = 6, dpi = 300)
+  scale_x_continuous(labels = function(x){paste0(x, "%")}) +
+  scale_color_brewer(palette = "Set1", labels = c(".38 (10th Ptile)", ".48 (50th Ptile)", ".59 (90 Ptile)")) +
+  scale_fill_brewer(palette = "Set1", labels = c(".38 (10th Ptile)", ".48 (50th Ptile)", ".59 (90 Ptile)")) +
+  labs(x = "\nShare Latinx", y = "Predicted Lambda\n",
+       color = "Latinx-White Segregation", fill = "Latinx-White Segregation") +
+  ggsave(filename = "./output/model/shr_latinx_interaction_effect_city_sub.pdf",
+         width = 7, height = 4, dpi = 300)
 
 
-#### Appendix models ----------------------------------------------------------
 
-#Appendix 1: adding smooth for vacancy 
-gam_lambda_form_app_1 <- log(lambda) ~ 
-  trt_tot_rent_hu + s(trt_vac_rate) +
-  trt_shr_same_home + log(dist_to_cbd) + trt_shr_blt_pre_1940 +
-  log(trt_med_hh_inc) + trt_med_n_rooms + trt_shr_age_20_34 + 
-  trt_shr_age_65plus + trt_shr_col_stud + trt_shr_eng_only + 
-  log(trt_avg_hh_size) + trt_shr_col_grad +
-  trt_shr_blk + trt_shr_lat + trt_shr_wht * log(trt_med_hh_inc)
 
-#Appendix 2: adding smooth for vacancy and median year built
-gam_lambda_form_app_1 <- log(lambda) ~ 
-  trt_tot_rent_hu + s(trt_vac_rate) +
-  trt_shr_same_home + log(dist_to_cbd) + trt_shr_blt_pre_1940 +
-  log(trt_med_hh_inc) + trt_med_n_rooms + trt_shr_age_20_34 + 
-  trt_shr_age_65plus + trt_shr_col_stud + trt_shr_eng_only + 
-  log(trt_avg_hh_size) + trt_shr_col_grad +
-  trt_shr_blk + trt_shr_lat + trt_shr_wht * log(trt_med_hh_inc)
+#predict lambda at different % poverty and segregation values
+cl_plot_shr_pov <- visreg(seg_lm_lambda_cl, 
+                          xvar = "trt_shr_pov",
+                          by = "dis_poor_nonpoor",
+                          breaks = c(.30, .35, .40),
+                          trans = exp,
+                          plot = FALSE)$fit %>%
+  mutate(platform = "Craigslist", fit = "Spline", city_sub = "Overall")
+apts_plot_shr_pov <- visreg(seg_lm_lambda_apts, 
+                            xvar = "trt_shr_pov", 
+                            by = "dis_poor_nonpoor",
+                            breaks = c(.30, .35, .40),
+                            trans = exp,
+                            plot = FALSE)$fit %>%
+  mutate(platform = "Apartments.com", fit = "Spline", city_sub = "Overall")
+
+cl_plot_shr_pov_city <- visreg(seg_lm_lambda_cl_city, 
+                               xvar = "trt_shr_pov",
+                               by = "dis_poor_nonpoor",
+                               breaks = c(.30, .35, .40),
+                               trans = exp,
+                               plot = FALSE)$fit %>%
+  mutate(platform = "Craigslist", fit = "Spline", city_sub = "City")
+apts_plot_shr_pov_city <- visreg(seg_lm_lambda_apts_city, 
+                                 xvar = "trt_shr_pov", 
+                                 by = "dis_poor_nonpoor",
+                                 breaks = c(.30, .35, .40),
+                                 trans = exp,
+                                 plot = FALSE)$fit %>%
+  mutate(platform = "Apartments.com", fit = "Spline", city_sub = "City")
+
+cl_plot_shr_pov_sub <- visreg(seg_lm_lambda_cl_sub, 
+                              xvar = "trt_shr_pov",
+                              by = "dis_poor_nonpoor",
+                              breaks = c(.30, .35, .40),
+                              trans = exp,
+                              plot = FALSE)$fit %>%
+  mutate(platform = "Craigslist", fit = "Spline", city_sub = "Suburb")
+apts_plot_shr_pov_sub <- visreg(seg_lm_lambda_apts_sub, 
+                                xvar = "trt_shr_pov", 
+                                by = "dis_poor_nonpoor",
+                                breaks = c(.30, .35, .40),
+                                trans = exp,
+                                plot = FALSE)$fit %>%
+  mutate(platform = "Apartments.com", fit = "Spline", city_sub = "Suburb")
+
+#combine different platform predictions into a single tbl, limit to 0-30%
+plot_shr_pov <- bind_rows(cl_plot_shr_pov, apts_plot_shr_pov,
+                          cl_plot_shr_pov_city, apts_plot_shr_pov_city,
+                          cl_plot_shr_pov_sub, apts_plot_shr_pov_sub) %>%
+  filter(trt_shr_pov >= 0,
+         trt_shr_pov <= .5)
+plot_shr_pov$city_sub <- factor(plot_shr_pov$city_sub)
+plot_shr_pov$city_sub <- factor(plot_shr_pov$city_sub, levels = levels(plot_shr_pov$city_sub)[c(2, 1, 3)])
+
+#plot the predictions, save to disk
+ggplot(plot_shr_pov, aes(x = trt_shr_pov*100, y = visregFit, 
+                         color = as.factor(dis_poor_nonpoor), 
+                         fill = as.factor(dis_poor_nonpoor),
+                         group = as.factor(dis_poor_nonpoor),
+                         ymin = visregLwr, ymax = visregUpr)) +
+  facet_grid(platform ~ city_sub) +
+  geom_line() +
+  geom_ribbon(alpha = .25, color = NA) +
+  theme_minimal() +
+  theme(panel.spacing = unit(.25, "in"),
+        plot.margin = unit(c(.25, .25, .25, .25), "in"),
+        legend.position = "bottom") +
+  scale_x_continuous(labels = function(x){paste0(x, "%")}) +
+  scale_color_brewer(palette = "Set1") +
+  scale_fill_brewer(palette = "Set1") +
+  labs(x = "\nPoverty Rate", y = "Predicted Lambda\n", 
+       fill = "Poverty Segregation", color = "Poverty Segregation") +
+  ggsave(filename = "./output/model/shr_pov_interaction_effect_city_sub.pdf",
+         width = 7, height = 4, dpi = 300)
+
 
 
